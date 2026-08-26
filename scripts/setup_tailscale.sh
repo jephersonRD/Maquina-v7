@@ -1,55 +1,57 @@
 #!/usr/bin/env bash
 #
-# Maquina-v7 :: setup_tailscale.sh
-# Instala Tailscale en Colab y une la maquina a tu Tailnet para que
-# puedas conectarte por RDP de forma segura desde Android / PC
-# sin exponer puertos publicos.
+# Maquina-v7 :: setup_tailscale.sh  (robusto para contenedores Colab)
+# Instala Tailscale, une la maquina a tu tailnet y muestra la IP.
+# Uso: bash setup_tailscale.sh <AUTHKEY>
 #
-# Uso:
-#   bash setup_tailscale.sh <TAILSCALE_AUTHKEY>   (recomendado)
-#   bash setup_tailscale.sh                        (modo QR: escanea con tu cuenta)
-#
-# Conseguir AUTHKEY gratis: https://login.tailscale.com/admin/settings/keys
-#
-set -euo pipefail
-
+set -u
 AUTHKEY="${1:-}"
+SOCK="/var/run/tailscale/tailscaled.sock"
 
-echo "==================================================="
-echo "  Maquina-v7 :: Configurando Tailscale"
-echo "==================================================="
-
-# 1) Instalar Tailscale
-export DEBIAN_FRONTEND=noninteractive
+echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+echo "  🌐 Instalando Tailscale"
+echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
 if ! command -v tailscale >/dev/null 2>&1; then
-    echo "[*] Instalando Tailscale..."
-    curl -fsSL https://tailscale.com/install.sh | sh
+  echo "   ↳ descargando installer oficial..."
+  curl -fsSL https://tailscale.com/install.sh -o /tmp/ts_install.sh
+  sh /tmp/ts_install.sh >/tmp/ts_install.log 2>&1 \
+    || (apt-get update -y && apt-get install -y tailscale)
 fi
 
-# 2) Arrancar tailscaled en modo userspace (compatible con contenedores Colab)
-echo "[*] Iniciando tailscaled..."
-pkill tailscaled 2>/dev/null || true
-sleep 1
-tailscaled --tun=userspace-networking --state=/var/lib/tailscale/tailscaled.state >/tmp/tailscaled.log 2>&1 &
-sleep 3
+if ! command -v tailscale >/dev/null 2>&1; then
+  echo "   ❌ No se pudo instalar Tailscale. Revisa /tmp/ts_install.log"
+  echo "      (¿la sesion tiene salida a internet? ¿apt funciona?)"
+  exit 1
+fi
+echo "   ✅ tailscale instalado: $(command -v tailscale)"
 
-# 3) Unirse a la tailnet
+mkdir -p /var/lib/tailscale /var/run/tailscale
+pkill -x tailscaled 2>/dev/null; sleep 1
+
+echo "   ↳ arrancando tailscaled (userspace)..."
+tailscaled --tun=userspace-networking \
+  --state=/var/lib/tailscale/tailscaled.state \
+  --socket="$SOCK" >/tmp/tailscaled.log 2>&1 &
+sleep 5
+
+echo "   ↳ uniendo a la tailnet..."
 if [ -n "$AUTHKEY" ]; then
-    echo "[*] Conectando con authkey..."
-    tailscale up --authkey="$AUTHKEY" --hostname=maquina-v7 --accept-routes || \
-    tailscale up --authkey="$AUTHKEY" --hostname=maquina-v7
+  tailscale --socket="$SOCK" up --authkey="$AUTHKEY" \
+    --hostname=maquina-v7 --accept-routes --netfilter-mode=off \
+    && echo "   ✅ conectado con authkey" \
+    || echo "   ❌ fallo al conectar. ¿authkey valido? log: tail /tmp/tailscaled.log"
 else
-    echo "[*] No se proporciono authkey -> mostrando QR para escanear"
-    tailscale up --hostname=maquina-v7 --qr || tailscale up --hostname=maquina-v7
+  echo "   (sin authkey) mostrando QR para escanear con tu cuenta:"
+  tailscale --socket="$SOCK" up --hostname=maquina-v7 --accept-routes --netfilter-mode=off --qr 2>/dev/null \
+    || tailscale --socket="$SOCK" up --hostname=maquina-v7 --accept-routes --netfilter-mode=off
 fi
 
 sleep 3
-
-# 4) Mostrar IP de Tailscale (esta es la que pondras en el cliente de Android)
-TS_IP=$(tailscale ip -4 2>/dev/null | head -n1 || echo "")
-echo "==================================================="
-echo "  Tailscale listo."
-echo "  IP de esta maquina en tu red: $TS_IP"
-echo "  Conectate desde Android con 'Microsoft Remote Desktop'"
-echo "  usando la IP $TS_IP  y puerto 3389."
-echo "==================================================="
+echo ""
+echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+echo "  Estado de Tailscale:"
+echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+tailscale --socket="$SOCK" status 2>&1 | head -20
+TS_IP=$(tailscale --socket="$SOCK" ip -4 2>/dev/null | head -n1)
+echo "IP de esta maquina en tu red: ${TS_IP:-<no conectado>}"
+echo "${TS_IP}" > /tmp/maquina_v7_ts_ip.txt
