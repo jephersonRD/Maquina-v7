@@ -45,6 +45,14 @@ la contraseña y el authkey de Tailscale paso a paso:
 ```python
 from google.colab import drive
 drive.mount('/content/drive')
+import os
+
+# El orquestador lee estas variables (evita el input() bloqueante en %run)
+os.environ['MV7_USER']  = input("👤 Usuario RDP [v7user]: ") or "v7user"
+os.environ['MV7_PASS']  = input("🔑 Contraseña [v7pass]: ") or "v7pass"
+os.environ['MV7_NET']   = input("🌐 Red 1=Tailscale 2=Cloudflare 3=local [2]: ") or "2"
+os.environ['MV7_TS']    = input("🔑 Tailscale authkey (si red=1, si no Enter): ") if os.environ['MV7_NET'] == "1" else ""
+os.environ['MV7_STEAM'] = "1" if input("🎮 ¿Steam + Chromium? (s/n) [s]: ").lower() != "n" else "0"
 
 !wget -q https://raw.githubusercontent.com/jephersonRD/Maquina-v7/main/scripts/run_v7.py
 %run run_v7.py

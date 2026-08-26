@@ -2,8 +2,10 @@
 # -*- coding: utf-8 -*-
 #
 # Maquina-v7 :: run_v7.py
-# Orquestador para Google Colab con barras de progreso y keep-alive reforzado.
-# Uso:  %run run_v7.py
+# Orquestador para Google Colab. Lee la configuracion desde variables de
+# entorno (para evitar el input() bloqueante dentro de %run) y muestra
+# barras de progreso. Uso en Colab:
+#   %run run_v7.py
 #
 import os
 import re
@@ -32,7 +34,6 @@ def _silent_wav_b64():
 
 
 def _keepalive():
-    # 1) Audio en silencio en loop (mantiene la pagina "activa")
     try:
         from IPython.display import display, HTML
         uri = "data:audio/wav;base64," + _silent_wav_b64()
@@ -41,8 +42,6 @@ def _keepalive():
             f'<audio autoplay src="{uri}" loop controls></audio>'))
     except Exception:
         pass
-    # 2) JavaScript: simula actividad de raton para enganar el detector de
-    #    inactividad de Colab (evita desconexion mientras la celda trabaja)
     try:
         from IPython.display import Javascript
         display(Javascript(
@@ -52,7 +51,6 @@ def _keepalive():
             "}catch(e){}}, 20000);"))
     except Exception:
         pass
-    # 3) Heartbeat de red cada 60s
     def _hb():
         while True:
             time.sleep(60)
@@ -65,14 +63,17 @@ def _keepalive():
     threading.Thread(target=_hb, daemon=True).start()
 
 
+def _env(name, default=""):
+    return os.environ.get(name, default)
+
+
 def _run(cmd, timeout=1800, live=True):
     print("\n>> " + cmd)
     if live:
-        # Muestra la salida en vivo (hereda la terminal de la celda)
         subprocess.run(cmd, shell=True, check=False, timeout=timeout)
     else:
-        r = subprocess.run(cmd, shell=True, check=False, capture_output=True, text=True,
-                           timeout=timeout)
+        r = subprocess.run(cmd, shell=True, check=False, capture_output=True,
+                           text=True, timeout=timeout)
         return r.stdout.strip()
 
 
@@ -122,52 +123,42 @@ def _start_cloudflared():
 
 
 def main():
+    USERNAME = _env("MV7_USER", "v7user").strip() or "v7user"
+    PASSWORD = _env("MV7_PASS", "v7pass").strip() or "v7pass"
+    NET = _env("MV7_NET", "2").strip() or "2"
+    TS = _env("MV7_TS", "").strip()
+    STEAM = _env("MV7_STEAM", "1") == "1"
+
     print("╔" + "═" * 56)
     print("║   MAQUINA-v7  ·  Cloud PC Linux + xrdp en Google Colab")
     print("╚" + "═" * 56)
     _keepalive()
 
-    USERNAME = input("\n👤 Usuario del escritorio RDP [v7user]: ").strip() or "v7user"
-    PASSWORD = input("🔑 Contraseña [v7pass]: ").strip() or "v7pass"
-    print("\n🌐 Método de red para conectar desde Android:")
-    print("   1) Tailscale  (authkey gratis, red privada)")
-    print("   2) Cloudflare (túnel público automático, SIN cuenta)  ← fácil")
-    print("   3) Solo local (no conectable desde fuera)")
-    metodo = input("Elige [2]: ").strip() or "2"
-    steam = input("🎮 ¿Instalar Steam para juegos? (s/n) [n]: ").strip().lower().startswith('s')
-
-    total = 5
-    # FASE 1
     _bar(20, "DESCARGANDO SCRIPTS")
     sd = _ensure_scripts()
     os.chdir(sd)
 
-    # FASE 2
-    _bar(40, "INSTALANDO ESCRITORIO Xfce + xrdp (2-5 min)")
+    _bar(40, "INSTALANDO ESCRITORIO Xfce + xrdp + Chromium (2-5 min)")
     _run(f"bash setup_rdp.sh {USERNAME} {PASSWORD} 1920x1080")
 
-    # FASE 3
-    _bar(60, "CONFIGURANDO RED / TÚNEL")
+    _bar(60, "CONFIGURANDO RED / TUNEL")
     host = port = None
-    if metodo == "1":
-        TS = input("🌐 Tailscale authkey: ").strip()
+    if NET == "1":
         _run(f'bash setup_tailscale.sh "{TS}"' if TS else "bash setup_tailscale.sh")
         out = _run("tailscale ip -4 2>/dev/null | head -n1", live=False)
         if out:
             host, port = out, "3389"
-    elif metodo == "2":
+    elif NET == "2":
         host, port = _start_cloudflared()
     else:
         print("   ℹ️ solo local.")
 
-    # FASE 4
-    if steam:
+    if STEAM:
         _bar(80, "INSTALANDO STEAM (1-3 min)")
         _run("bash install_steam.sh")
     else:
         _bar(80, "OMITIENDO STEAM")
 
-    # FASE 5
     _bar(100, "LISTO")
     print("\n" + "=" * 56)
     print("  ✅ MAQUINA-v7 LISTA")
