@@ -1,39 +1,32 @@
 #!/usr/bin/env bash
 #
 # Maquina-v7 :: install_steam.sh
-# Solo se ejecuta si Colab nos otorga GPU. Instala Steam (Linux) y
-# utilidades para cloud gaming dentro del escritorio Xfce + xrdp.
-# Si no hay GPU, el escritorio RDP sigue funcionando en modo CPU.
+# Instala Steam (Linux) dentro del escritorio. Muestra progreso.
+# Si Colab da GPU, prepara gaming; si no, igual instala el cliente.
 #
-set -euo pipefail
-
-export DEBIAN_FRONTEND=noninteractive
-
-echo "==================================================="
-echo "  Maquina-v7 :: Detectando GPU y preparando gaming"
-echo "==================================================="
-
-HAS_GPU=0
+echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+echo "  🎮 Comprobando GPU..."
+echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
 if command -v nvidia-smi >/dev/null 2>&1 && nvidia-smi >/dev/null 2>&1; then
-    HAS_GPU=1
-    echo "[OK] GPU NVIDIA detectada:"
-    nvidia-smi --query-gpu=name,memory.total --format=csv,noheader
+  echo "   ✅ GPU NVIDIA detectada:"
+  nvidia-smi --query-gpu=name,memory.total --format=csv,noheader
+  HAS_GPU=1
 else
-    echo "[!] Sin GPU: se usa modo solo-escritorio (CPU)."
+  echo "   ℹ️ Sin GPU: se instala Steam igual, pero sin aceleracion."
+  HAS_GPU=0
 fi
 
-echo "[*] Instalando Steam y utilidades..."
-apt-get update -qq
-apt-get install -y -qq steam latte-dock gamemode >/dev/null 2>&1 || \
-    apt-get install -y steam >/dev/null 2>&1 || echo "[!] No se pudo instalar steam (revisa conexion)."
+echo ""
+echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+echo "  📦 Instalando Steam (puede tardar 1-3 min)..."
+echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+apt-get update -y
+apt-get install -y steam
 
 if [ "$HAS_GPU" = "1" ]; then
-    # Asegurar que el driver de usuario este presente
-    apt-get install -y -qq libnvidia-gl-* nvidia-utils-* >/dev/null 2>&1 || true
-    echo "[OK] Listo para jugar. Abre Steam desde el menu de Xfce."
-    echo "      Conectate por RDP y disfruta. Para mejor latencia,"
-    echo "      usa 'Microsoft Remote Desktop' en Android."
+  echo "   ↳ instalando drivers de usuario NVIDIA..."
+  apt-get install -y libnvidia-gl-* nvidia-utils-* >/dev/null 2>&1 || true
+  echo "   ✅ Listo para jugar. Abre Steam desde el menu de Xfce."
 else
-    echo "[!] GPU no disponible: instalaste solo el entorno de escritorio."
-    echo "      Para gaming necesitas una sesion de Colab con GPU (T4)."
+  echo "   ✅ Steam instalado (modo CPU). Para gaming necesitas sesion con GPU."
 fi

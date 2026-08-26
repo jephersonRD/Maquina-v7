@@ -1,37 +1,46 @@
 #!/usr/bin/env bash
 #
-# Maquina-v7 :: setup_rdp.sh  (version robusta para Colab)
+# Maquina-v7 :: setup_rdp.sh  (version con progreso visible)
 # Instala Xfce4 + xrdp y deja el escritorio listo en el puerto 3389.
-# No usa 'set -e' para no morir ante un fallo parcial de apt.
+# Muestra todo el proceso (sin silenciar) para que veas que si instala.
 #
 USERNAME="${1:-v7user}"
 PASSWORD="${2:-v7pass}"
 RESOLUTION="${3:-1920x1080}"
 
-echo "[*] Actualizando apt..."
-apt-get update -y >/dev/null 2>&1 || apt-get update -y --fix-missing >/dev/null 2>&1
+echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+echo "  FASE 1/4  📦 Actualizando listas de apt..."
+echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+apt-get update -y
 
-echo "[*] Instalando Xfce4 + xrdp (hasta 3 intentos)..."
+echo ""
+echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+echo "  FASE 2/4  🖥️  Instalando escritorio Xfce4 + xrdp (puede tardar 2-5 min)"
+echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
 for i in 1 2 3; do
-  if apt-get install -y xfce4 xfce4-goodies xrdp xorgxrdp tigervnc-standalone-server \
-        dbus-x11 x11-utils curl wget net-tools >/dev/null 2>&1; then
-    echo "[OK] paquetes instalados"
+  echo "   ↳ intento $i de instalacion..."
+  if apt-get install -y xfce4 xfce4-goodies xrdp xorgxrdp \
+        tigervnc-standalone-server dbus-x11 x11-utils curl wget net-tools; then
+    echo "   ✅ paquetes instalados"
     break
   fi
-  echo "[!] intento $i fallo, reintentando..."
-  sleep 3
+  echo "   ⚠️ fallo, reintentando en 3s..."; sleep 3
 done
 
-# Crear usuario
+echo ""
+echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+echo "  FASE 3/4  👤 Creando usuario RDP: $USERNAME"
+echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
 if ! id "$USERNAME" >/dev/null 2>&1; then
-  useradd -m -s /bin/bash "$USERNAME"
+  useradd -m -s /bin/bash "$USERNAME" && echo "   ✅ usuario creado"
+else
+  echo "   ℹ️ el usuario ya existe"
 fi
-echo "$USERNAME:$PASSWORD" | chpasswd
+echo "$USERNAME:$PASSWORD" | chpasswd && echo "   ✅ contrasena configurada"
 usermod -aG sudo "$USERNAME" 2>/dev/null
 echo "xfce4-session" > "/home/$USERNAME/.xsession"
 chown "$USERNAME:$USERNAME" "/home/$USERNAME/.xsession" 2>/dev/null || true
 
-# startwm -> Xfce
 cat > /etc/xrdp/startwm.sh <<'EOF'
 #!/bin/sh
 export DESKTOP_SESSION=xfce
@@ -39,12 +48,13 @@ export XDG_CURRENT_DESKTOP=XFCE
 exec /usr/bin/xfce4-session
 EOF
 chmod +x /etc/xrdp/startwm.sh
-
-# Resolucion por defecto
 sed -i "s/^geometry=.*/geometry=$RESOLUTION/" /etc/xrdp/xrdp.ini 2>/dev/null || true
+echo "   ✅ escritorio Xfce configurado para xrdp"
 
-# Iniciar xrdp (Colab no usa systemd)
-echo "[*] Iniciando xrdp..."
+echo ""
+echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+echo "  FASE 4/4  🚀 Iniciando servidor RDP (puerto 3389)"
+echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
 pkill -x xrdp 2>/dev/null; pkill -x xrdp-sesman 2>/dev/null; sleep 1
 if command -v service >/dev/null 2>&1; then
   service xrdp stop 2>/dev/null
@@ -52,16 +62,16 @@ if command -v service >/dev/null 2>&1; then
 fi
 sleep 2
 if ! pgrep -x xrdp >/dev/null 2>&1; then
-  echo "[*] arrancando xrdp manualmente (background)..."
+  echo "   ↳ arranque manual en background..."
   nohup xrdp-sesman -n >/tmp/sesman.log 2>&1 &
   nohup xrdp -n >/tmp/xrdp.log 2>&1 &
   sleep 2
 fi
 
-# Verificar
 if (ss -ltn 2>/dev/null | grep -q ':3389') || (netstat -ltn 2>/dev/null | grep -q ':3389'); then
-  echo "[OK] RDP escuchando en puerto 3389"
+  echo "   ✅ RDP escuchando en puerto 3389"
 else
-  echo "[!] 3389 NO escucha. Revisa /tmp/xrdp.log y /tmp/sesman.log"
+  echo "   ⚠️ 3389 NO escucha. Revisa: tail /tmp/xrdp.log"
 fi
-echo "[INFO] Usuario=$USERNAME  Password=$PASSWORD  Puerto=3389"
+echo ""
+echo "📋 RESUMEN: Usuario=$USERNAME | Password=$PASSWORD | Puerto=3389"
