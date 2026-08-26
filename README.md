@@ -114,21 +114,40 @@ fi
 echo "👤 Creando usuario __USER__..."
 id "__USER__" >/dev/null 2>&1 || useradd -m -s /bin/bash "__USER__"
 echo "__USER__:__PASS__" | chpasswd
-usermod -aG sudo "__USER__" 2>/dev/null
+usermod -aG sudo,ssl-cert,xrdp "__USER__" 2>/dev/null
 echo "xfce4-session" > /home/__USER__/.xsession
 chown __USER__:__USER__ /home/__USER__/.xsession 2>/dev/null || true
 printf '#!/bin/sh\nxfce4-session\n' > /etc/xrdp/startwm.sh
 chmod +x /etc/xrdp/startwm.sh
 
+echo "🔧 Ajustando configuracion de xrdp (compatibilidad en contenedor)..."
+# PAM: en contenedores pam_loginuid falla -> lo comentamos y usamos common-auth
+cat > /etc/pam.d/xrdp-sesman <<'EOF'
+auth     include     common-auth
+account  include     common-account
+password include     common-password
+session  include     common-session-noninteractive
+EOF
+
+# sesman: sin restriccion de usuarios (evita 'login failed')
+sed -i 's/^TerminalServerUsers=.*/TerminalServerUsers=/' /etc/xrdp/sesman.ini
+sed -i 's/^TerminalServerAdmins=.*/TerminalServerAdmins=/' /etc/xrdp/sesman.ini
+grep -q '^AllowedUsers' /etc/xrdp/sesman.ini || echo 'AllowedUsers=*' >> /etc/xrdp/sesman.ini
+
+# xrdp.ini: capa de seguridad RDP (mejor compatibilidad con clientes Android/Windows)
+sed -i 's/^security_layer=.*/security_layer=rdp/' /etc/xrdp/xrdp.ini
+sed -i 's/^crypt_level=.*/crypt_level=low/' /etc/xrdp/xrdp.ini
+
 echo "🚀 Iniciando servidor RDP (puerto 3389)..."
-pkill -x xrdp 2>/dev/null; sleep 1
-service xrdp restart 2>/dev/null \
-  || (nohup xrdp-sesman -n >/tmp/sesman.log 2>&1 & nohup xrdp -n >/tmp/xrdp.log 2>&1 &)
+pkill -x xrdp-sesman 2>/dev/null; pkill -x xrdp 2>/dev/null; sleep 2
+nohup xrdp-sesman -n >/tmp/sesman.log 2>&1 &
+sleep 1
+nohup xrdp -n >/tmp/xrdp.log 2>&1 &
 sleep 3
-if (ss -ltn 2>/dev/null | grep -q ':3389') || (netstat -ltn 2>/dev/null | grep -q ':3389'); then
-  echo "✅ RDP escuchando en puerto 3389"
+if (ss -ltnp 2>/dev/null | grep -q ':3389') || (netstat -ltnp 2>/dev/null | grep -q ':3389'); then
+  echo "✅ RDP escuchando en 0.0.0.0:3389"
 else
-  echo "⚠️ 3389 NO escucha. Revisa: tail /tmp/xrdp.log"
+  echo "⚠️ 3389 NO escucha. Log xrdp:"; tail -n 20 /tmp/xrdp.log
 fi
 
 if [ -n "__TS__" ]; then
@@ -143,13 +162,23 @@ if [ -n "__TS__" ]; then
     --authkey="__TS__" --hostname=maquina-v7 --accept-routes --netfilter-mode=off
   sleep 3
   IP=$(tailscale --socket=/var/run/tailscale/tailscaled.sock ip -4 2>/dev/null | head -n1)
-  echo "📱 IP Tailscale: $IP   |   puerto 3389   |   usuario: __USER__"
+  echo "📱 IP Tailscale: $IP"
   echo "(Ve https://login.tailscale.com -> Devices y APROBA 'maquina-v7' si aparece pendiente)"
 else
+  IP=""
   echo "ℹ️ Sin Tailscale. IP local de la sesion: $(hostname -I)"
 fi
 
-echo "✅ Maquina-v7 lista. Conectate por RDP con la IP de arriba."
+echo ""
+echo "══════════════════════════════════════════════"
+echo "  ✅ Maquina-v7 lista."
+echo "  Usuario RDP : __USER__"
+echo "  Contraseña  : __PASS__"
+echo "  Puerto      : 3389"
+echo "  IP a usar   : ${IP:-$(hostname -I)}"
+echo "══════════════════════════════════════════════"
+echo "  En el RDP pon SOLO el usuario (sin dominio) y esa contraseña."
+echo "  Si el login falla, corre: tail -n 40 /var/log/xrdp-sesman.log"
 '''
 bash_script = (bash_script
                .replace("__USER__", USERNAME)
