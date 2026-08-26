@@ -1,107 +1,67 @@
 #!/usr/bin/env bash
 #
-# Maquina-v7 :: setup_rdp.sh
-# Instala un escritorio Xfce4 + xrdp en Google Colab y lo deja listo
-# para conectarse por RDP (Microsoft Remote Desktop) desde Android / PC.
+# Maquina-v7 :: setup_rdp.sh  (version robusta para Colab)
+# Instala Xfce4 + xrdp y deja el escritorio listo en el puerto 3389.
+# No usa 'set -e' para no morir ante un fallo parcial de apt.
 #
-# Uso:
-#   bash setup_rdp.sh <usuario> <password> [resolucion]
-#
-# Diseñado para correr como root dentro de un notebook de Colab.
-# No depende de binarios externos ni de servicios de terceros frágiles.
-#
-set -euo pipefail
-
 USERNAME="${1:-v7user}"
 PASSWORD="${2:-v7pass}"
 RESOLUTION="${3:-1920x1080}"
 
-echo "==================================================="
-echo "  Maquina-v7 :: Configurando escritorio RDP"
-echo "  Usuario     : $USERNAME"
-echo "  Resolucion  : $RESOLUTION"
-echo "==================================================="
+echo "[*] Actualizando apt..."
+apt-get update -y >/dev/null 2>&1 || apt-get update -y --fix-missing >/dev/null 2>&1
 
-# 1) Actualizar e instalar Xfce4 + xrdp (sin modo interactivo)
-export DEBIAN_FRONTEND=noninteractive
-echo "[*] Instalando paquetes (puede tardar 2-4 min)..."
-apt-get update -qq
-apt-get install -y -qq \
-    xfce4 xfce4-goodies xrdp xorgxrdp \
-    tigervnc-standalone-server \
-    dbus-x11 x11-utils \
-    software-properties-common \
-    curl wget net-tools >/dev/null 2>&1 || {
-        echo "[!] apt fallo parcial, reintentando sin -qq"
-        apt-get update
-        apt-get install -y xfce4 xfce4-goodies xrdp xorgxrdp tigervnc-standalone-server \
-                          dbus-x11 x11-utils curl wget net-tools
-    }
+echo "[*] Instalando Xfce4 + xrdp (hasta 3 intentos)..."
+for i in 1 2 3; do
+  if apt-get install -y xfce4 xfce4-goodies xrdp xorgxrdp tigervnc-standalone-server \
+        dbus-x11 x11-utils curl wget net-tools >/dev/null 2>&1; then
+    echo "[OK] paquetes instalados"
+    break
+  fi
+  echo "[!] intento $i fallo, reintentando..."
+  sleep 3
+done
 
-# 2) Crear usuario (si no existe) y asignar contrasena
-if ! id "$USERNAME" &>/dev/null; then
-    echo "[*] Creando usuario $USERNAME"
-    useradd -m -s /bin/bash "$USERNAME"
-    adduser "$USERNAME" sudo >/dev/null 2>&1 || true
+# Crear usuario
+if ! id "$USERNAME" >/dev/null 2>&1; then
+  useradd -m -s /bin/bash "$USERNAME"
 fi
 echo "$USERNAME:$PASSWORD" | chpasswd
-# Shell por defecto bash
-sed -i 's#/bin/sh$#/bin/bash#' /etc/passwd 2>/dev/null || true
-
-# 3) Configurar la sesion Xfce para el usuario
+usermod -aG sudo "$USERNAME" 2>/dev/null
 echo "xfce4-session" > "/home/$USERNAME/.xsession"
 chown "$USERNAME:$USERNAME" "/home/$USERNAME/.xsession" 2>/dev/null || true
-# Tambien para root por si se usa
-echo "xfce4-session" > /root/.xsession 2>/dev/null || true
 
-# 4) Ajustar xrdp para usar Xfce y la resolucion deseada
-XRDP_INI="/etc/xrdp/xrdp.ini"
-if [ -f "$XRDP_INI" ]; then
-    # Fijar resolucion por defecto en las secciones de conexion
-    sed -i "s/^geometry=.*/geometry=$RESOLUTION/" "$XRDP_INI" 2>/dev/null || true
-    # Asegurar que la seccion por defecto use sesman-Xvnc (ya trae Xvnc)
-    sed -i "s/^lib=.*/lib=libvnc.so/" "$XRDP_INI" 2>/dev/null || true
-fi
-
-# startwm.sh -> Xfce
+# startwm -> Xfce
 cat > /etc/xrdp/startwm.sh <<'EOF'
 #!/bin/sh
-if [ -r /etc/default/locale ]; then
-    . /etc/default/locale
-    export LANG LANGUAGE
-fi
 export DESKTOP_SESSION=xfce
 export XDG_CURRENT_DESKTOP=XFCE
 exec /usr/bin/xfce4-session
 EOF
 chmod +x /etc/xrdp/startwm.sh
 
-# 5) Habilitar e iniciar xrdp (Colab no usa systemd: usamos el init.d / service)
+# Resolucion por defecto
+sed -i "s/^geometry=.*/geometry=$RESOLUTION/" /etc/xrdp/xrdp.ini 2>/dev/null || true
+
+# Iniciar xrdp (Colab no usa systemd)
 echo "[*] Iniciando xrdp..."
-service xrdp stop 2>/dev/null || true
-sleep 1
+pkill -x xrdp 2>/dev/null; pkill -x xrdp-sesman 2>/dev/null; sleep 1
 if command -v service >/dev/null 2>&1; then
-    service xrdp start
-else
-    /etc/init.d/xrdp start
+  service xrdp stop 2>/dev/null
+  service xrdp start 2>/dev/null || service xrdp restart 2>/dev/null
 fi
 sleep 2
-
-# 6) Verificacion
-if pgrep -x xrdp >/dev/null && pgrep -x xrdp-sesman >/dev/null; then
-    echo "[OK] xrdp corriendo en puerto 3389"
-else
-    echo "[!] xrdp no arranco; intentando en primer plano..."
-    (xrdp -n && xrdp-sesman -n) &
-    sleep 2
+if ! pgrep -x xrdp >/dev/null 2>&1; then
+  echo "[*] arrancando xrdp manualmente (background)..."
+  nohup xrdp-sesman -n >/tmp/sesman.log 2>&1 &
+  nohup xrdp -n >/tmp/xrdp.log 2>&1 &
+  sleep 2
 fi
 
-# 7) Resumen de conexion
-IP_PUBLICA=$(curl -s -m 5 https://api.ipify.org || echo "desconocida")
-echo "==================================================="
-echo "  RDP listo."
-echo "  Usuario : $USERNAME"
-echo "  Puerto  : 3389"
-echo "  IP pub  : $IP_PUBLICA (solo util si expones el puerto)"
-echo "  Recomendado: conectate via Tailscale (ver setup_tailscale.sh)"
-echo "==================================================="
+# Verificar
+if (ss -ltn 2>/dev/null | grep -q ':3389') || (netstat -ltn 2>/dev/null | grep -q ':3389'); then
+  echo "[OK] RDP escuchando en puerto 3389"
+else
+  echo "[!] 3389 NO escucha. Revisa /tmp/xrdp.log y /tmp/sesman.log"
+fi
+echo "[INFO] Usuario=$USERNAME  Password=$PASSWORD  Puerto=3389"

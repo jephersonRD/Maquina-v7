@@ -52,6 +52,20 @@ drive.mount('/content/drive')
 
 > 💡 Equivalente al viejo `ColabSteam`: tras ejecutarlo, contesta las
 > preguntas en los cuadros de Colab y se instala todo automáticamente.
+> Al final te muestra **la dirección exacta que debes poner en el RDP de Android**.
+
+### 🌐 ¿Cómo te conectas desde Android?
+El orquestador te pregunta el método de red:
+- **Opción 2 — Cloudflare (recomendada, sin cuenta):** crea un túnel público
+  automático y te da una dirección tipo `xxxx.trycloudflare.com:puerto` que
+  pones directo en *Microsoft Remote Desktop* de Android. ✅ Funciona al instante.
+- **Opción 1 — Tailscale:** red privada (necesitas un authkey gratis).
+- **Opción 3 — Solo local:** no conectable desde fuera de Colab.
+
+### ⚠️ No cierres la pestaña
+Colab mata la sesión si **cierras** la pestaña del navegador. Mantenla abierta
+(puedes minimizarla). El audio en silencio en loop + el heartbeat ayudan a que
+no la suspenda mientras está abierta.
 
 ## ✨ Características
 
