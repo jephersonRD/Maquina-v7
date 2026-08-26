@@ -36,6 +36,23 @@ para *cloud gaming* (Steam/Linux); si la sesión viene sin GPU, **degrada autom�
 escritorio remoto en CPU** en lugar de apagarse. La conexión se hace por **Tailscale**, una VPN
 privada de malla, para no exponer puertos públicos.
 
+## ▶️ Código para Colab (copiar y pegar)
+
+Pega **este único bloque** en una celda de Google Colab y ejecútalo.
+Él solo monta Drive, descarga el orquestador y te preguntará el usuario,
+la contraseña y el authkey de Tailscale paso a paso:
+
+```python
+from google.colab import drive
+drive.mount('/content/drive')
+
+!wget -q https://raw.githubusercontent.com/jephersonRD/Maquina-v7/main/scripts/run_v7.py
+%run run_v7.py
+```
+
+> 💡 Equivalente al viejo `ColabSteam`: tras ejecutarlo, contesta las
+> preguntas en los cuadros de Colab y se instala todo automáticamente.
+
 ## ✨ Características
 
 - 🖥️ **Escritorio Xfce4** completo con `xrdp` (protocolo RDP estándar).
