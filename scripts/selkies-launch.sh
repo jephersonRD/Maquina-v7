@@ -57,13 +57,11 @@ else
   echo "   → Sin GPU: $ENC (CPU, fallback)"
 fi
 
-echo "🌐 Lanzando servidor Selkies en 0.0.0.0:$PORT (WebRTC + HTTPS)..."
+echo "🌐 Lanzando servidor Selkies en 0.0.0.0:$PORT (WebRTC; HTTP local, TLS lo termina cloudflared)..."
 exec "$APP_DIR/bin/python" -m selkies_gstreamer \
   --addr=0.0.0.0 \
   --port="$PORT" \
-  --enable_https=true \
-  --https_cert="$CERT" \
-  --https_key="$KEY" \
+  --enable_https=false \
   --enable_basic_auth=true \
   --basic_auth_user="$USERNAME" \
   --basic_auth_password="$PASSWORD" \

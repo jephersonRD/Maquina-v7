@@ -90,11 +90,16 @@ nohup "$SELKIES_DIR/selkies-loop.sh" "$USERNAME" "$PASSWORD" "$RESOLUTION" "$POR
 echo ""
 echo "========================================"
 echo "✅ Selkies corriendo en segundo plano (puerto $PORT)."
-echo "   Acceso local : https://localhost:$PORT"
+echo "   Acceso local : http://localhost:$PORT"
 echo "   Usuario      : $USERNAME"
 echo "   Contraseña   : $PASSWORD"
 echo "   Exponiendo por túnel público (cloudflared)... espera ~15s."
 echo "========================================"
+
+# ---- Verificacion de salud local ----
+sleep 5
+CODE=$(curl -s -o /dev/null -w "%{http_code}" "http://localhost:${PORT}/" 2>/dev/null)
+echo "   Selkies local responde HTTP: ${CODE:-sin respuesta}"
 
 # ---- Exponer Selkies por cloudflared (URL pública HTTPS, sin Tailscale) ----
 if [ ! -x /usr/local/bin/cloudflared ]; then
@@ -104,8 +109,8 @@ if [ ! -x /usr/local/bin/cloudflared ]; then
     && chmod +x /usr/local/bin/cloudflared || echo "⚠️ no se pudo descargar cloudflared"
 fi
 if [ -x /usr/local/bin/cloudflared ]; then
-  nohup /usr/local/bin/cloudflared tunnel --url "https://localhost:${PORT}" \
-    --no-tls-verify --no-autoupdate >/tmp/cloudflared.log 2>&1 &
+  nohup /usr/local/bin/cloudflared tunnel --url "http://localhost:${PORT}" \
+    --no-autoupdate >/tmp/cloudflared.log 2>&1 &
   URL=""
   for i in $(seq 1 40); do
     URL=$(grep -oE 'https://[a-zA-Z0-9.-]+\.trycloudflare\.com' /tmp/cloudflared.log | head -n1)
@@ -121,7 +126,7 @@ if [ -x /usr/local/bin/cloudflared ]; then
     echo "========================================"
   else
     echo "⚠️ No se obtuvo la URL de cloudflared. Revisa /tmp/cloudflared.log"
-    echo "   Mientras tanto puedes usar el acceso local https://localhost:$PORT"
+    echo "   Mientras tanto puedes usar el acceso local http://localhost:$PORT"
   fi
 fi
 echo "   Logs Selkies : tail -f /tmp/selkies.log"

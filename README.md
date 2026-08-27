@@ -96,7 +96,7 @@ print("Abre esa URL en Chrome/Edge/Firefox. El certificado es autofirmado: conti
 1. Ejecuta la celda de instalación: al terminar muestra una **URL pública**
    `https://<random>.trycloudflare.com`. También la muestra la celda **URL de acceso**.
 2. Abre esa URL en el navegador (móvil o PC).
-3. Si el navegador avisa del certificado autofirmado, es normal: continúa (opción "avanzado/continuar").
+3. La URL de cloudflared ya es **HTTPS válido** (lo termina Cloudflare), así que el navegador no avisa.
 4. Inicia sesión con **usuario** `jeph` y **contraseña** `medina`.
 5. (Opcional) Si prefieres **Tailscale** en vez de cloudflared, descomenta las líneas de la
    celda "URL de acceso" y usa `https://<IP_Tailscale>:8080`.
