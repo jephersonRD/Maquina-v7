@@ -113,8 +113,8 @@ def _start_cloudflared():
         "curl -fsSL# https://github.com/cloudflare/cloudflared/releases/latest/download/"
         "cloudflared-linux-amd64 -o /usr/local/bin/cloudflared && chmod +x /usr/local/bin/cloudflared",
         shell=True, check=False)
-    print("   ↳ abriendo túnel público TCP -> 3389 (espera ~10s)...")
-    proc = subprocess.Popen("cloudflared tunnel --url tcp://localhost:3389",
+    print("   ↳ abriendo túnel público TCP -> 8080 (espera ~10s)...")
+    proc = subprocess.Popen("cloudflared tunnel --url tcp://localhost:8080",
                              shell=True, stdout=subprocess.PIPE,
                              stderr=subprocess.STDOUT, text=True)
     found = {}
@@ -141,7 +141,7 @@ def main():
     STEAM = os.environ.get("MV7_STEAM", "1") == "1"
 
     print("╔" + "═" * 56)
-    print("║   MAQUINA-v7  ·  Cloud PC Linux + xrdp en Google Colab")
+    print("║   MAQUINA-v7  ·  Cloud PC Linux + Selkies (WebRTC) en Google Colab")
     print("╚" + "═" * 56)
     _keepalive()
 
@@ -149,8 +149,8 @@ def main():
     sd = _ensure_scripts()
     os.chdir(sd)
 
-    _bar(40, "INSTALANDO KDE Plasma + xrdp")
-    _run_spin(f"bash setup_rdp.sh {USERNAME} {PASSWORD} 1920x1080",
+    _bar(40, "INSTALANDO KDE Plasma + Selkies")
+    _run_spin(f"bash setup_selkies.sh {USERNAME} {PASSWORD} 1920x1080 8080",
               label="instalando escritorio (2-5 min)")
 
     _bar(60, "CONFIGURANDO RED / TÚNEL")
@@ -160,7 +160,7 @@ def main():
         out = subprocess.run("tailscale ip -4 2>/dev/null | head -n1",
                              shell=True, capture_output=True, text=True).stdout.strip()
         if out:
-            host, port = out, "3389"
+            host, port = out, "8080"
             print("   ✅ Tailscale conectado. IP:", host)
         else:
             print("   ⚠️ Tailscale NO conectó. Revisa el authkey arriba y tu")
@@ -180,16 +180,15 @@ def main():
     print("\n" + "=" * 56)
     print("  ✅ MAQUINA-v7 LISTA")
     print("  Usuario : " + USERNAME)
-    print("  Puerto local: 3389")
+    print("  Puerto local: 8080 (HTTPS)")
     if host and port:
         print("-" * 56)
-        print("  📱 PON ESTO EN 'Microsoft Remote Desktop' (Android):")
-        print("     Dirección : " + host)
-        print("     Puerto    : " + port)
-        print("     Usuario   : " + USERNAME)
-        print("     (o directo: " + host + ":" + port + ")")
+        print("  🌐 ABRE ESTO EN EL NAVEGADOR (Chrome/Edge/Firefox):")
+        print("     https://" + host + ":" + port)
+        print("     Usuario : " + USERNAME)
+        print("     (o directo: https://" + host + ":" + port + ")")
         with open("/content/Maquina-v7/CONEXION.txt", "w") as f:
-            f.write(f"{host}:{port} | usuario: {USERNAME}\n")
+            f.write(f"https://{host}:{port} | usuario: {USERNAME}\n")
     else:
         local = subprocess.run("hostname -I 2>/dev/null", shell=True,
                                capture_output=True, text=True).stdout.strip()

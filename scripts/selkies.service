@@ -1,0 +1,19 @@
+[Unit]
+Description=Selkies WebRTC Remote Desktop (KDE Plasma)
+After=network.target
+
+[Service]
+# Ajusta estas variables al crear la VM
+Environment=SELKIES_USER=v7user
+Environment=SELKIES_PASSWORD=v7pass
+Environment=SELKIES_RESOLUTION=1920x1080
+Environment=SELKIES_PORT=8080
+Environment=DISPLAY=:0
+Environment=XDG_RUNTIME_DIR=/tmp
+Type=simple
+ExecStart=/opt/selkies/selkies-launch.sh
+Restart=always
+RestartSec=3
+
+[Install]
+WantedBy=multi-user.target
