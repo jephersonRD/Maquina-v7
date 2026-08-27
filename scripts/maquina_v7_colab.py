@@ -35,10 +35,7 @@ echo "🖥️ [2/9] Instalando XFCE4 + xrdp..."
 DEBIAN_FRONTEND=noninteractive apt-get install -y \
   xfce4 xfce4-goodies xrdp xorgxrdp tigervnc-standalone-server \
   dbus-x11 x11-utils || die "fallo al instalar xfce4/xrdp"
-# Chromium es opcional (no bloquea el RDP)
-DEBIAN_FRONTEND=noninteractive apt-get install -y chromium-browser chromium 2>/dev/null \
-  || { add-apt-repository -y ppa:savoury1/chromium 2>/dev/null && apt-get update -y && apt-get install -y chromium 2>/dev/null; } \
-  || echo "   ⚠️ Chromium no se pudo instalar (no afecta al RDP)"
+# Chromium se omite a proposito para no bloquear la instalacion de xrdp.
 
 echo "👤 [3/9] Creando usuario __USER__..."
 id "__USER__" >/dev/null 2>&1 || useradd -m -s /bin/bash "__USER__" || die "no se pudo crear el usuario"

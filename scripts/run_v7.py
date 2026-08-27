@@ -149,7 +149,7 @@ def main():
     sd = _ensure_scripts()
     os.chdir(sd)
 
-    _bar(40, "INSTALANDO Xfce + xrdp + Chromium")
+    _bar(40, "INSTALANDO Xfce + xrdp")
     _run_spin(f"bash setup_rdp.sh {USERNAME} {PASSWORD} 1920x1080",
               label="instalando escritorio (2-5 min)")
 

@@ -73,10 +73,7 @@ echo "🖥️ [2/9] Instalando XFCE4 + xrdp..."
 DEBIAN_FRONTEND=noninteractive apt-get install -y \
   xfce4 xfce4-goodies xrdp xorgxrdp tigervnc-standalone-server \
   dbus-x11 x11-utils || die "fallo al instalar xfce4/xrdp"
-# Chromium es opcional (no bloquea el RDP)
-DEBIAN_FRONTEND=noninteractive apt-get install -y chromium-browser chromium 2>/dev/null \
-  || { add-apt-repository -y ppa:savoury1/chromium 2>/dev/null && apt-get update -y && apt-get install -y chromium 2>/dev/null; } \
-  || echo "   ⚠️ Chromium no se pudo instalar (no afecta al RDP)"
+# Chromium se omite a proposito para no bloquear la instalacion de xrdp.
 
 echo "👤 [3/9] Creando usuario __USER__..."
 id "__USER__" >/dev/null 2>&1 || useradd -m -s /bin/bash "__USER__" || die "no se pudo crear el usuario"
@@ -86,6 +83,18 @@ echo "xfce4-session" > /home/__USER__/.xsession
 chown __USER__:__USER__ /home/__USER__/.xsession 2>/dev/null || true
 printf '#!/bin/sh\nxfce4-session\n' > /etc/xrdp/startwm.sh
 chmod +x /etc/xrdp/startwm.sh
+
+# Desactivar el compositor de Xfce (evita repintados completos de pantalla)
+mkdir -p /home/__USER__/.config/xfce4/xfconf/xfce-perchannel-xml
+cat > /home/__USER__/.config/xfce4/xfconf/xfce-perchannel-xml/xfwm4.xml <<'EOF'
+<?xml version="1.0" encoding="UTF-8"?>
+<channel name="xfwm4" version="1.0">
+  <property name="general" type="empty">
+    <property name="use_compositing" type="bool" value="false"/>
+  </property>
+</channel>
+EOF
+chown -R __USER__:__USER__ /home/__USER__/.config 2>/dev/null || true
 
 echo "🔧 [4/9] Configurando xrdp (PAM / sesman)..."
 cat > /etc/pam.d/xrdp-sesman <<'EOF'
@@ -99,6 +108,11 @@ sed -i 's/^TerminalServerAdmins=.*/TerminalServerAdmins=/' /etc/xrdp/sesman.ini
 grep -q '^AllowedUsers' /etc/xrdp/sesman.ini || echo 'AllowedUsers=*' >> /etc/xrdp/sesman.ini
 sed -i 's/^security_layer=.*/security_layer=rdp/' /etc/xrdp/xrdp.ini
 sed -i 's/^crypt_level=.*/crypt_level=low/' /etc/xrdp/xrdp.ini
+
+# Rendimiento: menos datos por pixel + compresion (evita el "pintado" lento)
+sed -i -E '/^(max_bpp|bitmap_cache|bitmap_compression|bulk_compression|tcp_nodelay|xserverbpp)=/d' /etc/xrdp/xrdp.ini
+sed -i '/^\[Globals\]/a max_bpp=16\nbitmap_cache=yes\nbitmap_compression=yes\nbulk_compression=yes\ntcp_nodelay=yes' /etc/xrdp/xrdp.ini
+sed -i '/^\[Xorg\]/a xserverbpp=16' /etc/xrdp/xrdp.ini 2>/dev/null || sed -i '/^\[Xvnc\]/a xserverbpp=16' /etc/xrdp/xrdp.ini 2>/dev/null || true
 
 echo "🚀 [5/9] Iniciando xrdp-sesman y xrdp..."
 pkill -x xrdp-sesman 2>/dev/null; pkill -x xrdp 2>/dev/null; sleep 2

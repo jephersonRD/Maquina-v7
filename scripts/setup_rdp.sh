@@ -12,26 +12,31 @@ echo "━━━━━━━━━━━━━━━━━━━━━━━━�
 apt-get update -y
 
 echo ""
-echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-echo "  FASE 2/5  🖥️  Instalando Xfce4 + xrdp + Chromium (2-5 min)"
-echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+echo "  FASE 2/5  Instalando entorno RDP (Xfce4 + xrdp) - obligatorio"
+echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+CORE_PKGS="xfce4 xfce4-goodies xrdp xorgxrdp tigervnc-standalone-server dbus-x11 x11-utils curl wget net-tools"
 for i in 1 2 3; do
-  echo "   ↳ intento $i..."
-  if apt-get install -y xfce4 xfce4-goodies xrdp xorgxrdp \
-        tigervnc-standalone-server dbus-x11 x11-utils curl wget net-tools \
-        chromium-browser chromium; then
-    echo "   ✅ paquetes base instalados"; break
+  echo "   intento $i..."
+  if DEBIAN_FRONTEND=noninteractive apt-get install -y $CORE_PKGS; then
+    echo "   entorno RDP instalado"; break
   fi
-  echo "   ⚠️ fallo, reintentando en 3s..."; sleep 3
+  echo "   fallo, reintentando en 5s..."; sleep 5
 done
 
-# Chromium puede no estar en los repos estandar (snap). Usar PPA no-snap.
-if ! command -v chromium-browser >/dev/null 2>&1 && ! command -v chromium >/dev/null 2>&1; then
-  echo "   ↳ Chromium no disponible por defecto, probando PPA savoury1..."
-  add-apt-repository -y ppa:savoury1/chromium >/dev/null 2>&1
-  apt-get update -y >/dev/null 2>&1
-  apt-get install -y chromium >/dev/null 2>&1 || apt-get install -y chromium-browser
+# Si xorgxrdp fallo, reintentar sin el (back-end Xvnc)
+if ! command -v xrdp >/dev/null 2>&1; then
+  echo "   reintentando sin xorgxrdp (se usara Xvnc)..."
+  DEBIAN_FRONTEND=noninteractive apt-get install -y xfce4 xfce4-goodies xrdp \
+    tigervnc-standalone-server dbus-x11 x11-utils curl wget net-tools
 fi
+
+if ! command -v xrdp >/dev/null 2>&1; then
+  echo "   xrdp no se pudo instalar. Revisa apt-get install xrdp manualmente."
+  exit 1
+fi
+
+echo "   xrdp instalado correctamente (Chromium omitido a proposito)."
 
 echo ""
 echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
@@ -56,6 +61,48 @@ EOF
 chmod +x /etc/xrdp/startwm.sh
 sed -i "s/^geometry=.*/geometry=$RESOLUTION/" /etc/xrdp/xrdp.ini 2>/dev/null || true
 echo "   ✅ escritorio Xfce configurado para xrdp"
+
+echo ""
+echo "   ⚙️  Optimizando rendimiento de xrdp (fluidez RDP)..."
+XRDP_INI=/etc/xrdp/xrdp.ini
+
+# 1) Quitar ajustes de rendimiento previos para reinsertarlos limpios
+sed -i -E '/^(max_bpp|bitmap_cache|bitmap_compression|bulk_compression|tcp_nodelay|security_layer|crypt_level|xserverbpp)=/d' "$XRDP_INI"
+
+# 2) Claves globales: menos datos por pixel + compresion + sin TLS extra
+sed -i '/^\[Globals\]/r /dev/stdin' "$XRDP_INI" <<'XRDPCFG'
+max_bpp=16
+bitmap_cache=yes
+bitmap_compression=yes
+bulk_compression=yes
+tcp_nodelay=yes
+security_layer=rdp
+crypt_level=low
+XRDPCFG
+
+# 3) Forzar profundidad de color baja en la sesion grafica
+if grep -q '^\[Xorg\]' "$XRDP_INI"; then
+  sed -i '/^\[Xorg\]/r /dev/stdin' "$XRDP_INI" <<'XRDPCFG'
+xserverbpp=16
+XRDPCFG
+elif grep -q '^\[Xvnc\]' "$XRDP_INI"; then
+  sed -i '/^\[Xvnc\]/r /dev/stdin' "$XRDP_INI" <<'XRDPCFG'
+xserverbpp=16
+XRDPCFG
+fi
+
+# 4) Desactivar el compositor de Xfce (evita repintados completos de pantalla)
+mkdir -p "/home/$USERNAME/.config/xfce4/xfconf/xfce-perchannel-xml"
+cat > "/home/$USERNAME/.config/xfce4/xfconf/xfce-perchannel-xml/xfwm4.xml" <<'EOF'
+<?xml version="1.0" encoding="UTF-8"?>
+<channel name="xfwm4" version="1.0">
+  <property name="general" type="empty">
+    <property name="use_compositing" type="bool" value="false"/>
+  </property>
+</channel>
+EOF
+chown -R "$USERNAME:$USERNAME" "/home/$USERNAME/.config" 2>/dev/null || true
+echo "   ✅ xrdp ajustado: 16bpp + compresion + compositor Xfce OFF"
 
 echo ""
 echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
@@ -84,7 +131,6 @@ if (ss -ltn 2>/dev/null | grep -q ':3389') || (netstat -ltn 2>/dev/null | grep -
 else
   echo "   ⚠️ 3389 NO escucha. Revisa: tail /tmp/xrdp.log"
 fi
-CB=$(command -v chromium-browser || command -v chromium || echo "NO")
-echo "   Chromium: $CB"
+echo "   Chromium: omitido (no necesario para el RDP)"
 echo ""
 echo "📋 RESUMEN: Usuario=$USERNAME | Password=$PASSWORD | Puerto=3389"
