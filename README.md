@@ -30,10 +30,10 @@ sin abrir el puerto 8080 a Internet.
 
 ## ▶️ Código para Colab (copiar y pegar)
 
-Pega **este único bloque** en una celda de Google Colab y ejecútalo. **No descarga nada
-externo** salvo paquetes apt y Tailscale. Antes de ejecutar, pega tu **authkey** de Tailscale
-en la variable `TS_AUTHKEY` (línea marcada). Al final muestra un bloque con la **IP, usuario y
-contraseña** listos para abrir en el navegador.
+Pega **este único bloque** en una celda de Google Colab y ejecútalo. Descarga el proyecto
+como tarball desde GitHub (sin `git` ni credenciales) y los paquetes apt/Tailscale. Antes de
+ejecutar, pega tu **authkey** de Tailscale en la variable `TS_AUTHKEY` (línea marcada). Al final
+muestra la **URL, usuario y contraseña** listos para abrir en el navegador.
 
 ```python
 # ===== Maquina-v7 (Selkies / WebRTC en vez de XRDP) =====
@@ -55,7 +55,13 @@ if TS_AUTHKEY in ("", "PEG_AQUI_TU_TAILSCALE_AUTHKEY"):
 
 repo_dir = "/content/Maquina-v7"
 if not os.path.isdir(repo_dir):
-    subprocess.run(f"git clone https://github.com/jephersonRD/Maquina-v7.git {repo_dir}", shell=True, check=True)
+    import tarfile, urllib.request
+    tar_url = "https://codeload.github.com/jephersonRD/Maquina-v7/tar.gz/refs/heads/main"
+    urllib.request.urlretrieve(tar_url, "/tmp/maquina-v7.tar.gz")
+    with tarfile.open("/tmp/maquina-v7.tar.gz") as t:
+        t.extractall("/content")
+    os.rename("/content/Maquina-v7-main", repo_dir)
+    os.remove("/tmp/maquina-v7.tar.gz")
 os.chdir(repo_dir + "/scripts")
 
 print("Ejecutando instalador Selkies (puede tardar varios minutos)...\n")
