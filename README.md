@@ -25,8 +25,9 @@
 
 **Maquina-v7** convierte una sesión de **Google Colab** en un **escritorio remoto GNU/Linux**
 (KDE Plasma + `Selkies`) al que te conectas desde el **navegador** (Chrome, Edge, Firefox) en
-**Android**, Windows o macOS. La conexión se hace por **Tailscale**, una VPN privada de malla,
-sin abrir el puerto 8080 a Internet.
+**Android**, Windows o macOS. La conexión se expone vía un **túnel público de cloudflared**
+(URL HTTPS lista para usar); **Tailscale es opcional** y ya no se requiere. El puerto 8080 no
+queda abierto directamente a Internet.
 
 ## ▶️ Código para Colab (copiar y pegar)
 
@@ -37,21 +38,17 @@ muestra la **URL, usuario y contraseña** listos para abrir en el navegador.
 
 ```python
 # ===== Maquina-v7 (Selkies / WebRTC en vez de XRDP) =====
-# Cloud PC Linux (KDE Plasma + Selkies) accesible desde el navegador via Tailscale en Google Colab.
+# Cloud PC Linux (KDE Plasma + Selkies) accesible desde el navegador via túnel cloudflared en Google Colab.
 # Pega ESTE bloque completo en una celda de Colab y ejecutalo.
 import subprocess, os
 
-# ====== CONFIGURACION (edita solo TS_AUTHKEY) ======
-TS_AUTHKEY = "PEG_AQUI_TU_TAILSCALE_AUTHKEY"   # <-- pega tu authkey de https://login.tailscale.com/admin/settings/keys
+# ====== CONFIGURACION ======
 USERNAME   = "jeph"
 PASSWORD   = "medina"
 RESOLUTION = "1920x1080"
 PORT       = "8080"
+# Acceso por túnel público cloudflared (Tailscale es opcional, ya no requerido).
 # ===================================================
-
-if TS_AUTHKEY in ("", "PEG_AQUI_TU_TAILSCALE_AUTHKEY"):
-    print("Debes pegar tu Tailscale authkey en la variable TS_AUTHKEY (arriba).")
-    raise SystemExit(1)
 
 repo_dir = "/content/Maquina-v7"
 if not os.path.isdir(repo_dir):
@@ -69,34 +66,40 @@ r = subprocess.run(f"bash setup_selkies.sh {USERNAME} {PASSWORD} {RESOLUTION} {P
 if r.returncode != 0:
     print("\n❌❌ setup_selkies.sh termino con error."); raise SystemExit(r.returncode)
 
-print("Conectando a Tailscale...")
-r = subprocess.run(f'bash setup_tailscale.sh "{TS_AUTHKEY}"', shell=True)
-if r.returncode != 0:
-    print("\n❌❌ setup_tailscale.sh termino con error."); raise SystemExit(r.returncode)
+import re, time
+url = ""
+for _ in range(45):
+    log = subprocess.run("tail -n 200 /tmp/cloudflared.log 2>/dev/null", shell=True, capture_output=True, text=True).stdout
+    m = re.search(r'https://[a-zA-Z0-9._-]+\.trycloudflare\.com', log)
+    if m:
+        url = m.group(0); break
+    time.sleep(1)
 
-ip = subprocess.run("tailscale ip -4 2>/dev/null | head -n1", shell=True, capture_output=True, text=True).stdout.strip()
 print("\n========================================")
 print("✅ MAQUINA LISTA (Selkies / WebRTC)")
-print("🌐 URL navegador : https://%s:%s" % (ip, PORT))
+if url:
+    print("🌐 URL pública   :", url)
+else:
+    print("🌐 URL cloudflared: no disponible aún (revisa /tmp/cloudflared.log)")
 print("👤 USUARIO       :", USERNAME)
 print("🔑 CONTRASEÑA     :", PASSWORD)
 print("========================================")
-print("Abre esa URL en Chrome/Edge/Firefox. Si el certificado es autofirmado, continua.")
+print("Abre esa URL en Chrome/Edge/Firefox. El certificado es autofirmado: continua.")
 ```
 
 > 💡 El script **no termina con `returncode=0` si algo falló**: revisa
 > `tail -n 40 /tmp/selkies.log` y los mensajes de arriba. Al final imprime la
-> URL `https://<IP>:8080` con la IP, usuario y contraseña.
+> **URL pública de cloudflared** (https://...trycloudflare.com) con usuario y contraseña.
 
 ### 🌐 Conectarte desde el navegador (Chrome / Edge / Firefox)
 
-1. Instala **Tailscale** en el MÓVIL/PC y entra con la **misma cuenta** que generó la authkey
-   (el cliente debe estar en el mismo tailnet para enrutar a `100.x.x.x`).
-2. Abre **https://`100.x.x.x`:8080** (la URL que muestra el script) en el navegador.
+1. Ejecuta la celda de instalación: al terminar muestra una **URL pública**
+   `https://<random>.trycloudflare.com`. También la muestra la celda **URL de acceso**.
+2. Abre esa URL en el navegador (móvil o PC).
 3. Si el navegador avisa del certificado autofirmado, es normal: continúa (opción "avanzado/continuar").
 4. Inicia sesión con **usuario** `jeph` y **contraseña** `medina`.
-5. Si en la consola de Tailscale el dispositivo `maquina-v7` aparece **pendiente**,
-   púlsalo y **Aprueba**.
+5. (Opcional) Si prefieres **Tailscale** en vez de cloudflared, descomenta las líneas de la
+   celda "URL de acceso" y usa `https://<IP_Tailscale>:8080`.
 
 ### ⚠️ No cierres la pestaña
 Colab mata la sesión si cierras la pestaña. Mantenla abierta (puedes minimizarla).
@@ -113,7 +116,7 @@ Colab mata la sesión si cierras la pestaña. Mantenla abierta (puedes minimizar
 
 ```
  Tu Android / PC (con Tailscale en la misma cuenta)
-       │  WebRTC/HTTPS (8080) sobre la VPN Tailscale
+        │  WebRTC/HTTPS (8080) sobre túnel cloudflared
        ▼
   ┌──────────────────────────────────┐
   │  Google Colab (contenedor Linux) │

@@ -93,7 +93,35 @@ echo "✅ Selkies corriendo en segundo plano (puerto $PORT)."
 echo "   Acceso local : https://localhost:$PORT"
 echo "   Usuario      : $USERNAME"
 echo "   Contraseña   : $PASSWORD"
-echo "   Para acceder desde tu móvil/PC: ejecuta la celda de Tailscale"
-echo "   y luego la celda de Estado para ver la URL por Tailscale."
-echo "   Logs: tail -f /tmp/selkies.log"
+echo "   Exponiendo por túnel público (cloudflared)... espera ~15s."
 echo "========================================"
+
+# ---- Exponer Selkies por cloudflared (URL pública HTTPS, sin Tailscale) ----
+if [ ! -x /usr/local/bin/cloudflared ]; then
+  echo "   ↳ descargando cloudflared..."
+  curl -fsSL --max-time 120 -o /usr/local/bin/cloudflared \
+    "https://github.com/cloudflare/cloudflared/releases/latest/download/cloudflared-linux-amd64" \
+    && chmod +x /usr/local/bin/cloudflared || echo "⚠️ no se pudo descargar cloudflared"
+fi
+if [ -x /usr/local/bin/cloudflared ]; then
+  nohup /usr/local/bin/cloudflared tunnel --url "https://localhost:${PORT}" \
+    --no-tls-verify --no-autoupdate >/tmp/cloudflared.log 2>&1 &
+  URL=""
+  for i in $(seq 1 40); do
+    URL=$(grep -oE 'https://[a-zA-Z0-9.-]+\.trycloudflare\.com' /tmp/cloudflared.log | head -n1)
+    [ -n "$URL" ] && break
+    sleep 1
+  done
+  echo ""
+  if [ -n "$URL" ]; then
+    echo "========================================"
+    echo "🌐 URL PÚBLICA (abrela en el navegador):"
+    echo "   $URL"
+    echo "   Usuario: $USERNAME | Contraseña: $PASSWORD"
+    echo "========================================"
+  else
+    echo "⚠️ No se obtuvo la URL de cloudflared. Revisa /tmp/cloudflared.log"
+    echo "   Mientras tanto puedes usar el acceso local https://localhost:$PORT"
+  fi
+fi
+echo "   Logs Selkies : tail -f /tmp/selkies.log"
