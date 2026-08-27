@@ -24,7 +24,7 @@
 ## 📖 Descripción
 
 **Maquina-v7** convierte una sesión de **Google Colab** en un **escritorio remoto GNU/Linux**
-(Xfce + `xrdp`) al que te conectas con el cliente **Microsoft Remote Desktop** desde
+(KDE Plasma + `xrdp`) al que te conectas con el cliente **Microsoft Remote Desktop** desde
 **Android**, Windows o macOS. La conexión se hace por **Tailscale**, una VPN privada de malla,
 sin abrir el puerto 3389 a Internet.
 
@@ -37,7 +37,7 @@ contraseña** listos para el RDP.
 
 ```python
 # ===== Maquina-v7 (autocontenido: NO descarga nada externo salvo paquetes) =====
-# Cloud PC Linux (XFCE + xrdp) accesible por RDP via Tailscale en Google Colab.
+# Cloud PC Linux (KDE Plasma + xrdp) accesible por RDP via Tailscale en Google Colab.
 # Pega ESTE bloque completo en una celda de Colab y ejecutalo.
 import subprocess
 
@@ -69,30 +69,26 @@ die() {
 echo "📦 [1/9] Actualizando apt..."
 apt-get update -y || die "apt-get update fallo"
 
-echo "🖥️ [2/9] Instalando XFCE4 + xrdp..."
+echo "🖥️ [2/9] Instalando KDE Plasma + xrdp..."
 DEBIAN_FRONTEND=noninteractive apt-get install -y \
-  xfce4 xfce4-goodies xrdp xorgxrdp tigervnc-standalone-server \
-  dbus-x11 x11-utils || die "fallo al instalar xfce4/xrdp"
+  kde-plasma-desktop xrdp xorgxrdp tigervnc-standalone-server \
+  dbus-x11 x11-utils || die "fallo al instalar kde/xrdp"
 # Chromium se omite a proposito para no bloquear la instalacion de xrdp.
 
 echo "👤 [3/9] Creando usuario __USER__..."
 id "__USER__" >/dev/null 2>&1 || useradd -m -s /bin/bash "__USER__" || die "no se pudo crear el usuario"
 echo "__USER__:__PASS__" | chpasswd || die "no se pudo fijar la contrasena"
 usermod -aG sudo,ssl-cert,xrdp "__USER__" 2>/dev/null
-echo "xfce4-session" > /home/__USER__/.xsession
+echo "startplasma-x11" > /home/__USER__/.xsession
 chown __USER__:__USER__ /home/__USER__/.xsession 2>/dev/null || true
-printf '#!/bin/sh\nxfce4-session\n' > /etc/xrdp/startwm.sh
+printf '#!/bin/sh\nexport DESKTOP_SESSION=plasma\nexport XDG_CURRENT_DESKTOP=KDE\nexec /usr/bin/startplasma-x11\n' > /etc/xrdp/startwm.sh
 chmod +x /etc/xrdp/startwm.sh
 
-# Desactivar el compositor de Xfce (evita repintados completos de pantalla)
-mkdir -p /home/__USER__/.config/xfce4/xfconf/xfce-perchannel-xml
-cat > /home/__USER__/.config/xfce4/xfconf/xfce-perchannel-xml/xfwm4.xml <<'EOF'
-<?xml version="1.0" encoding="UTF-8"?>
-<channel name="xfwm4" version="1.0">
-  <property name="general" type="empty">
-    <property name="use_compositing" type="bool" value="false"/>
-  </property>
-</channel>
+# Desactivar la composicion de KWin (evita repintados completos de pantalla)
+mkdir -p /home/__USER__/.config
+cat > /home/__USER__/.config/kwinrc <<'EOF'
+[Compositing]
+Enabled=false
 EOF
 chown -R __USER__:__USER__ /home/__USER__/.config 2>/dev/null || true
 
@@ -223,7 +219,7 @@ Colab mata la sesión si cierras la pestaña. Mantenla abierta (puedes minimizar
 
 ## ✨ Características
 
-- 🖥️ **Escritorio Xfce4** completo con `xrdp` (protocolo RDP estándar).
+- 🖥️ **Escritorio KDE Plasma** completo con `xrdp` (protocolo RDP estándar).
 - 📱 **Cliente Android**: app oficial *Microsoft Remote Desktop*.
 - 🔐 **Tailscale**: red privada segura, el puerto 3389 NO se expone a Internet.
 - 🔒 **Keep-alive**: evita el cierre por inactividad de Colab.
@@ -237,7 +233,7 @@ Colab mata la sesión si cierras la pestaña. Mantenla abierta (puedes minimizar
        ▼
   ┌──────────────────────────────────┐
   │  Google Colab (contenedor Linux) │
-  │   ├─ Xfce4 desktop               │
+  │   ├─ KDE Plasma desktop               │
   │   ├─ xrdp  (servidor RDP:3389)   │
   │   └─ Tailscale (VPN mesh)        │
   └──────────────────────────────────┘

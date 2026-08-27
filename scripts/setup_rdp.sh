@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 #
-# Maquina-v7 :: setup_rdp.sh  (progreso visible + Chromium + verificacion)
+# Maquina-v7 :: setup_rdp.sh  (progreso visible + KDE Plasma + verificacion)
 #
 USERNAME="${1:-v7user}"
 PASSWORD="${2:-v7pass}"
@@ -13,9 +13,9 @@ apt-get update -y
 
 echo ""
 echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-echo "  FASE 2/5  Instalando entorno RDP (Xfce4 + xrdp) - obligatorio"
+echo "  FASE 2/5  Instalando entorno RDP (KDE Plasma + xrdp) - obligatorio"
 echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-CORE_PKGS="xfce4 xfce4-goodies xrdp xorgxrdp tigervnc-standalone-server dbus-x11 x11-utils curl wget net-tools"
+CORE_PKGS="kde-plasma-desktop xrdp xorgxrdp tigervnc-standalone-server dbus-x11 x11-utils curl wget net-tools"
 for i in 1 2 3; do
   echo "   intento $i..."
   if DEBIAN_FRONTEND=noninteractive apt-get install -y $CORE_PKGS; then
@@ -27,7 +27,7 @@ done
 # Si xorgxrdp fallo, reintentar sin el (back-end Xvnc)
 if ! command -v xrdp >/dev/null 2>&1; then
   echo "   reintentando sin xorgxrdp (se usara Xvnc)..."
-  DEBIAN_FRONTEND=noninteractive apt-get install -y xfce4 xfce4-goodies xrdp \
+  DEBIAN_FRONTEND=noninteractive apt-get install -y kde-plasma-desktop xrdp \
     tigervnc-standalone-server dbus-x11 x11-utils curl wget net-tools
 fi
 
@@ -49,18 +49,18 @@ else
 fi
 echo "$USERNAME:$PASSWORD" | chpasswd && echo "   ✅ contrasena configurada"
 usermod -aG sudo "$USERNAME" 2>/dev/null
-echo "xfce4-session" > "/home/$USERNAME/.xsession"
+echo "startplasma-x11" > "/home/$USERNAME/.xsession"
 chown "$USERNAME:$USERNAME" "/home/$USERNAME/.xsession" 2>/dev/null || true
 
 cat > /etc/xrdp/startwm.sh <<'EOF'
 #!/bin/sh
-export DESKTOP_SESSION=xfce
-export XDG_CURRENT_DESKTOP=XFCE
-exec /usr/bin/xfce4-session
+export DESKTOP_SESSION=plasma
+export XDG_CURRENT_DESKTOP=KDE
+exec /usr/bin/startplasma-x11
 EOF
 chmod +x /etc/xrdp/startwm.sh
 sed -i "s/^geometry=.*/geometry=$RESOLUTION/" /etc/xrdp/xrdp.ini 2>/dev/null || true
-echo "   ✅ escritorio Xfce configurado para xrdp"
+echo "   ✅ escritorio KDE Plasma configurado para xrdp"
 
 echo ""
 echo "   ⚙️  Optimizando rendimiento de xrdp (fluidez RDP)..."
@@ -91,18 +91,14 @@ xserverbpp=16
 XRDPCFG
 fi
 
-# 4) Desactivar el compositor de Xfce (evita repintados completos de pantalla)
-mkdir -p "/home/$USERNAME/.config/xfce4/xfconf/xfce-perchannel-xml"
-cat > "/home/$USERNAME/.config/xfce4/xfconf/xfce-perchannel-xml/xfwm4.xml" <<'EOF'
-<?xml version="1.0" encoding="UTF-8"?>
-<channel name="xfwm4" version="1.0">
-  <property name="general" type="empty">
-    <property name="use_compositing" type="bool" value="false"/>
-  </property>
-</channel>
+# 4) Desactivar la composicion de KWin (evita repintados completos de pantalla)
+mkdir -p "/home/$USERNAME/.config"
+cat > "/home/$USERNAME/.config/kwinrc" <<'EOF'
+[Compositing]
+Enabled=false
 EOF
 chown -R "$USERNAME:$USERNAME" "/home/$USERNAME/.config" 2>/dev/null || true
-echo "   ✅ xrdp ajustado: 16bpp + compresion + compositor Xfce OFF"
+echo "   ✅ xrdp ajustado: 16bpp + compresion + composicion KWin OFF"
 
 echo ""
 echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
