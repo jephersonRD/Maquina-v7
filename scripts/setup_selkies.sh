@@ -72,12 +72,28 @@ Enabled=false
 EOF
 chown -R "$USERNAME:$USERNAME" "/home/$USERNAME/.config" 2>/dev/null || true
 
-echo "🚀 Lanzando Selkies (bucle de reinicio)..."
+echo "🚀 Iniciando Selkies en segundo plano (bucle de reinicio)..."
 cp "$(dirname "$0")/selkies-launch.sh" "$SELKIES_DIR/selkies-launch.sh" 2>/dev/null || true
+cat > "$SELKIES_DIR/selkies-loop.sh" <<'EOF'
+#!/usr/bin/env bash
+# Bucle de reinicio de Selkies (ejecutado en segundo plano por setup_selkies.sh)
+U="$1"; P="$2"; R="$3"; PT="$4"
 while true; do
-  echo "[$(date)] iniciando Selkies..." >> "$LOGDIR/selkies.log"
-  bash "$SELKIES_DIR/selkies-launch.sh" "$USERNAME" "$PASSWORD" "$RESOLUTION" "$PORT" \
-    >> "$LOGDIR/selkies.log" 2>&1
-  echo "[$(date)] Selkies terminó (rc=$?). Reiniciando en 3s..." >> "$LOGDIR/selkies.log"
+  echo "[$(date)] iniciando Selkies..." >> "/tmp/selkies.log"
+  bash "/opt/selkies/selkies-launch.sh" "$U" "$P" "$R" "$PT" >> "/tmp/selkies.log" 2>&1
+  echo "[$(date)] Selkies terminó (rc=$?). Reiniciando en 3s..." >> "/tmp/selkies.log"
   sleep 3
 done
+EOF
+chmod +x "$SELKIES_DIR/selkies-loop.sh"
+nohup "$SELKIES_DIR/selkies-loop.sh" "$USERNAME" "$PASSWORD" "$RESOLUTION" "$PORT" >/dev/null 2>&1 &
+echo ""
+echo "========================================"
+echo "✅ Selkies corriendo en segundo plano (puerto $PORT)."
+echo "   Acceso local : https://localhost:$PORT"
+echo "   Usuario      : $USERNAME"
+echo "   Contraseña   : $PASSWORD"
+echo "   Para acceder desde tu móvil/PC: ejecuta la celda de Tailscale"
+echo "   y luego la celda de Estado para ver la URL por Tailscale."
+echo "   Logs: tail -f /tmp/selkies.log"
+echo "========================================"
