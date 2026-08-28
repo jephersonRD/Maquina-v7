@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
-# setup_selkies.sh - Instala Selkies (HTML5 + WebRTC) sobre KDE Plasma en Colab.
-# Reemplaza XRDP por Selkies (remote desktop HTML5 + WebRTC) sobre KDE Plasma.
+# setup_selkies.sh - Instala Selkies (HTML5 + WebRTC) sobre XFCE en Colab.
+# Reemplaza XRDP por Selkies (remote desktop HTML5 + WebRTC) sobre XFCE.
 # Uso: bash setup_selkies.sh <USUARIO> <CONTRASEÑA> <RESOLUCION> [PUERTO]
 set -uo pipefail
 
@@ -20,9 +20,9 @@ export DEBIAN_FRONTEND=noninteractive
 echo "📦 [1/7] Actualizando apt..."
 apt-get update -y || { echo "❌ apt-get update fallo"; exit 1; }
 
-echo "🖥️ [2/7] Instalando KDE Plasma, Xvfb y PulseAudio..."
+echo "🖥️ [2/7] Instalando XFCE, Xvfb y PulseAudio..."
 apt-get install -y \
-  kde-plasma-desktop xvfb dbus-x11 x11-utils pulseaudio \
+  xfce4 xfce4-goodies xvfb dbus-x11 x11-utils pulseaudio \
   openssl ca-certificates curl git \
   || { echo "❌ fallo al instalar el escritorio"; exit 1; }
 
@@ -64,11 +64,15 @@ if [ ! -f "$CERT" ]; then
     -days 3650 -subj "/CN=maquina-v7" >/dev/null 2>&1 || echo "⚠️ no se pudo generar el cert (HTTPS opcional)"
 fi
 
-echo "⚙️ [7/7] Desactivando compositor de KWin (menos latencia)..."
-mkdir -p "/home/$USERNAME/.config"
-cat > "/home/$USERNAME/.config/kwinrc" <<'EOF'
-[Compositing]
-Enabled=false
+echo "⚙️ [7/7] Desactivando compositor de XFCE (menos latencia)..."
+mkdir -p "/home/$USERNAME/.config/xfce4/xfconf/xfce-perchannel-xml"
+cat > "/home/$USERNAME/.config/xfce4/xfconf/xfce-perchannel-xml/xfwm4.xml" <<'EOF'
+<?xml version="1.0" encoding="UTF-8"?>
+<channel name="xfwm4" version="1.0">
+  <property name="general" type="empty">
+    <property name="use_compositing" type="bool" value="false"/>
+  </property>
+</channel>
 EOF
 chown -R "$USERNAME:$USERNAME" "/home/$USERNAME/.config" 2>/dev/null || true
 

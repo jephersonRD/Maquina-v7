@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# selkies-launch.sh - Arranca Xvfb + PulseAudio + KDE Plasma + Selkies (WebRTC/HTTPS).
+# selkies-launch.sh - Arranca Xvfb + PulseAudio + XFCE + Selkies (WebRTC/HTTPS).
 # Se llama desde setup_selkies.sh o desde selkies.service.
 # Uso: bash selkies-launch.sh <USUARIO> <CONTRASEÑA> <RESOLUCION> [PUERTO]
 set -uo pipefail
@@ -39,12 +39,12 @@ echo "   ✅ X disponible en $DISPLAY"
 echo "🔊 Iniciando PulseAudio..."
 pulseaudio --start --exit-idle-time=-1 >"$LOGDIR/pulse_selkies.log" 2>&1 || true
 
-echo "🖥️ Iniciando KDE Plasma..."
-if ! pgrep -x startplasma-x11 >/dev/null 2>&1; then
+echo "🖥️ Iniciando XFCE..."
+if ! pgrep -x startxfce4 >/dev/null 2>&1; then
   export XDG_SESSION_TYPE=x11
-  export XDG_CURRENT_DESKTOP=KDE
-  export DESKTOP_SESSION=plasma
-  dbus-launch startplasma-x11 >"$LOGDIR/kde_selkies.log" 2>&1 &
+  export XDG_CURRENT_DESKTOP=XFCE
+  export DESKTOP_SESSION=xfce
+  dbus-launch startxfce4 >"$LOGDIR/xfce_selkies.log" 2>&1 &
   sleep 5
 fi
 

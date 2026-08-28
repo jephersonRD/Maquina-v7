@@ -24,7 +24,7 @@
 ## 📖 Descripción
 
 **Maquina-v7** convierte una sesión de **Google Colab** en un **escritorio remoto GNU/Linux**
-(KDE Plasma + `Selkies`) al que te conectas desde el **navegador** (Chrome, Edge, Firefox) en
+(XFCE + `Selkies`) al que te conectas desde el **navegador** (Chrome, Edge, Firefox) en
 **Android**, Windows o macOS. La conexión se expone vía un **túnel público de cloudflared**
 (URL HTTPS lista para usar); **Tailscale es opcional** y ya no se requiere. El puerto 8080 no
 queda abierto directamente a Internet.
@@ -38,7 +38,7 @@ muestra la **URL, usuario y contraseña** listos para abrir en el navegador.
 
 ```python
 # ===== Maquina-v7 (Selkies / WebRTC en vez de XRDP) =====
-# Cloud PC Linux (KDE Plasma + Selkies) accesible desde el navegador via túnel cloudflared en Google Colab.
+# Cloud PC Linux (XFCE + Selkies) accesible desde el navegador via túnel cloudflared en Google Colab.
 # Pega ESTE bloque completo en una celda de Colab y ejecutalo.
 import subprocess, os
 
@@ -106,7 +106,7 @@ Colab mata la sesión si cierras la pestaña. Mantenla abierta (puedes minimizar
 
 ## ✨ Características
 
-- 🖥️ **Escritorio KDE Plasma** completo con `Selkies` (HTML5 + WebRTC).
+- 🖥️ **Escritorio XFCE** completo con `Selkies` (HTML5 + WebRTC).
 - 📱 **Cliente**: cualquier navegador moderno (Chrome, Edge, Firefox) en Android, PC o macOS.
 - 🔐 **Tailscale**: red privada segura, el puerto 8080 (HTTPS) NO se expone a Internet.
 - 🔒 **Keep-alive**: evita el cierre por inactividad de Colab.
@@ -120,7 +120,7 @@ Colab mata la sesión si cierras la pestaña. Mantenla abierta (puedes minimizar
        ▼
   ┌──────────────────────────────────┐
   │  Google Colab (contenedor Linux) │
-  │   ├─ KDE Plasma desktop               │
+  │   ├─ XFCE desktop                     │
   │   ├─ Selkies (servidor WebRTC/HTTPS:8080) │
   │   └─ Tailscale (VPN mesh)        │
   └──────────────────────────────────┘
