@@ -114,7 +114,7 @@ def _start_cloudflared():
         "cloudflared-linux-amd64 -o /usr/local/bin/cloudflared && chmod +x /usr/local/bin/cloudflared",
         shell=True, check=False)
     print("   ↳ abriendo túnel público a la Web UI de Sunshine -> 47989 (espera ~10s)...")
-    proc = subprocess.Popen("cloudflared tunnel --url http://localhost:47989",
+    proc = subprocess.Popen("cloudflared tunnel --url http://127.0.0.1:47989",
                              shell=True, stdout=subprocess.PIPE,
                              stderr=subprocess.STDOUT, text=True)
     found = {}

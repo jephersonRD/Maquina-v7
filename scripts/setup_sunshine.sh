@@ -124,10 +124,21 @@ echo "   Contraseña   : $PASSWORD"
 echo "   Exponiendo Web UI por túnel público (cloudflared)... espera ~15s."
 echo "========================================"
 
-# ---- Verificacion de salud local ----
+# ---- Verificacion de salud local (usar 127.0.0.1, NO localhost: este resuelve
+#      a IPv6 ::1 y Sunshine solo escucha IPv4 con address_family=ipv4) ----
 sleep 6
-CODE=$(curl -s -o /dev/null -w "%{http_code}" "http://localhost:${WEB_PORT}/" 2>/dev/null)
-echo "   Sunshine local responde HTTP: ${CODE:-sin respuesta}"
+CODE=$(curl -s -o /dev/null -w "%{http_code}" "http://127.0.0.1:${WEB_PORT}/serverinfo" 2>/dev/null)
+echo "   Sunshine local responde (serverinfo): ${CODE:-sin respuesta}"
+if [ "$CODE" != "200" ]; then
+  echo "   ⚠️ Sunshine aún no responde en 127.0.0.1:$WEB_PORT. Cola de log:"
+  tail -n 15 /tmp/sunshine.log 2>/dev/null || true
+fi
+
+# ---- IP de Tailscale para la Web UI (la forma mas fiable de emparejar) ----
+TS_IP=""
+if command -v tailscale >/dev/null 2>&1; then
+  TS_IP=$(tailscale ip -4 2>/dev/null | head -n1)
+fi
 
 # ---- Exponer la Web UI de Sunshine por cloudflared (HTTPS, para leer el PIN) ----
 if [ ! -x /usr/local/bin/cloudflared ]; then
@@ -136,29 +147,34 @@ if [ ! -x /usr/local/bin/cloudflared ]; then
     "https://github.com/cloudflare/cloudflared/releases/latest/download/cloudflared-linux-amd64" \
     && chmod +x /usr/local/bin/cloudflared || echo "⚠️ no se pudo descargar cloudflared"
 fi
+URL=""
 if [ -x /usr/local/bin/cloudflared ]; then
-  nohup /usr/local/bin/cloudflared tunnel --url "http://localhost:${WEB_PORT}" \
+  nohup /usr/local/bin/cloudflared tunnel --url "http://127.0.0.1:${WEB_PORT}" \
     --no-autoupdate >/tmp/cloudflared.log 2>&1 &
-  URL=""
   for i in $(seq 1 40); do
     URL=$(grep -oE 'https://[a-zA-Z0-9.-]+\.trycloudflare\.com' /tmp/cloudflared.log | head -n1)
     [ -n "$URL" ] && break
     sleep 1
   done
-  echo ""
-  if [ -n "$URL" ]; then
-    echo "========================================"
-    echo "🌐 URL WEB UI (abrela en el navegador del movil/PC):"
-    echo "   $URL"
-    echo "   Usuario: $USERNAME | Contraseña: $PASSWORD"
-    echo "   Entra, ve a 'PIN' y anota el codigo para emparejar Moonlight."
-    echo "========================================"
-  else
-    echo "⚠️ No se obtuvo la URL de cloudflared. Revisa /tmp/cloudflared.log"
-    echo "   Mientras tanto puedes usar el acceso local http://localhost:$WEB_PORT"
-  fi
 fi
+echo ""
+echo "========================================"
+echo "✅ Sunshine listo. Web UI (para el PIN de emparejamiento):"
+if [ -n "$TS_IP" ]; then
+  echo "   🥇 Recomendado (Tailscale, en el navegador del movil):"
+  echo "      http://$TS_IP:$WEB_PORT   (usuario: $USERNAME / password: $PASSWORD)"
+fi
+if [ -n "$URL" ]; then
+  echo "   🌐 También por cloudflared (HTTPS):"
+  echo "      $URL   (usuario: $USERNAME / password: $PASSWORD)"
+else
+  echo "   ⚠️ URL cloudflared no disponible; usa la de Tailscale arriba."
+fi
+echo ""
+echo "   📌 Emparejar Moonlight: abre la Web UI, ve a 'PIN', y escribe el"
+echo "      numero que te muestra Moonlight en el movil. Luego 'Pair'."
 echo "   Logs Sunshine : tail -f /tmp/sunshine.log"
+echo "========================================"
 echo ""
 echo "📱 Para jugar: instala Moonlight en Android, conecta por Tailscale a esta maquina"
-echo "   y empareja usando el PIN que aparece en la Web UI."
+echo "   (misma cuenta) y empareja usando el PIN que aparece en la Web UI."
