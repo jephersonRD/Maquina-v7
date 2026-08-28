@@ -11,7 +11,7 @@ PORT="${4:-8080}"
 
 SELKIES_DIR="/opt/selkies"
 APP_DIR="$SELKIES_DIR/selkies-gstreamer"
-WEB_ROOT="/opt/gst-web"
+WEB_ROOT="${WEB_ROOT:-/opt/gst-web}"
 CERT="$SELKIES_DIR/selkies.crt"
 KEY="$SELKIES_DIR/selkies.key"
 LOGDIR="/tmp"
@@ -58,6 +58,15 @@ else
 fi
 
 echo "🌐 Lanzando servidor Selkies en 0.0.0.0:$PORT (WebRTC; HTTP local, TLS lo termina cloudflared)..."
+if [ ! -x "$APP_DIR/bin/python" ]; then
+  echo "❌ No existe el python del bundle en $APP_DIR" >> "$LOGDIR/selkies.log"
+  exit 1
+fi
+if ! ls "$APP_DIR"/lib/python3*/site-packages/selkies_gstreamer >/dev/null 2>&1; then
+  echo "❌ No se encuentra el modulo selkies_gstreamer en $APP_DIR/lib/python3*/site-packages" >> "$LOGDIR/selkies.log"
+  exit 1
+fi
+[ -f "$WEB_ROOT/index.html" ] || echo "⚠️ WEB_ROOT ($WEB_ROOT) no tiene index.html; la UI dara 404" >> "$LOGDIR/selkies.log"
 exec "$APP_DIR/bin/python" -m selkies_gstreamer \
   --addr=0.0.0.0 \
   --port="$PORT" \

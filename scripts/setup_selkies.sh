@@ -58,6 +58,15 @@ curl -fsSL --max-time 120 -o "/tmp/$WEB" \
   || { echo "❌ fallo al descargar el frontend web de Selkies"; exit 1; }
 tar xzf "/tmp/$WEB" -C "$(dirname "$WEB_ROOT")" || { echo "❌ fallo al extraer el frontend web"; exit 1; }
 
+# Ajustar WEB_ROOT por si el tarball extrajo en un subdirectorio
+if [ ! -f "$WEB_ROOT/index.html" ]; then
+  FOUND=$(find "$(dirname "$WEB_ROOT")" -name index.html 2>/dev/null | head -n1)
+  [ -n "$FOUND" ] && WEB_ROOT="$(dirname "$FOUND")"
+fi
+echo "   Web root detectado: $WEB_ROOT"
+[ -f "$WEB_ROOT/index.html" ] || { echo "❌ No se encontro index.html en $WEB_ROOT"; exit 1; }
+export WEB_ROOT
+
 echo "🔐 [6/7] Generando certificado TLS autofirmado..."
 if [ ! -f "$CERT" ]; then
   openssl req -x509 -newkey rsa:2048 -nodes -keyout "$KEY" -out "$CERT" \
@@ -102,8 +111,18 @@ echo "========================================"
 
 # ---- Verificacion de salud local ----
 sleep 5
-CODE=$(curl -s -o /dev/null -w "%{http_code}" "http://localhost:${PORT}/" 2>/dev/null)
+CODE=""
+for i in $(seq 1 20); do
+  CODE=$(curl -s -o /dev/null -w "%{http_code}" "http://localhost:${PORT}/" 2>/dev/null)
+  [ "$CODE" = "200" ] && break
+  [ "$CODE" = "404" ] && break
+  sleep 2
+done
 echo "   Selkies local responde HTTP: ${CODE:-sin respuesta}"
+if [ "$CODE" = "000" ] || [ -z "$CODE" ]; then
+  echo "❌ Selkies NO escucha en $PORT. Ultimas lineas de /tmp/selkies.log:"
+  tail -n 25 /tmp/selkies.log
+fi
 
 # ---- Exponer Selkies por cloudflared (URL pública HTTPS, sin Tailscale) ----
 if [ ! -x /usr/local/bin/cloudflared ]; then
