@@ -1,5 +1,5 @@
 [Unit]
-Description=Selkies WebRTC Remote Desktop (KDE Plasma)
+Description=Selkies WebRTC Remote Desktop (XFCE)
 After=network.target
 
 [Service]

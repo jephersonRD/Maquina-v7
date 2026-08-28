@@ -149,7 +149,7 @@ def main():
     sd = _ensure_scripts()
     os.chdir(sd)
 
-    _bar(40, "INSTALANDO KDE Plasma + Selkies")
+    _bar(40, "INSTALANDO XFCE + Selkies")
     _run_spin(f"bash setup_selkies.sh {USERNAME} {PASSWORD} 1920x1080 8080",
               label="instalando escritorio (2-5 min)")
 

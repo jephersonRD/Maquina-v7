@@ -1,5 +1,5 @@
 # ===== Maquina-v7 (Selkies / WebRTC en vez de XRDP) =====
-# Cloud PC Linux (KDE Plasma + Selkies) accesible desde el navegador via Tailscale en Google Colab.
+# Cloud PC Linux (XFCE + Selkies) accesible desde el navegador via Tailscale en Google Colab.
 # Pega ESTE bloque completo en una celda de Colab y ejecutalo.
 import subprocess, os
 

@@ -32,7 +32,7 @@ done
 if [ "$HAS_GPU" = "1" ]; then
   echo "   ↳ drivers de usuario NVIDIA..."
   apt-get install -y libnvidia-gl-* nvidia-utils-* >/dev/null 2>&1 || true
-  echo "   ✅ Listo para jugar. Abre Steam desde el menu de KDE."
+  echo "   ✅ Listo para jugar. Abre Steam desde el menu de XFCE."
 else
   echo "   ✅ Steam instalado. Para gaming necesitas sesion con GPU."
 fi
