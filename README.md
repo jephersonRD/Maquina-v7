@@ -4,7 +4,7 @@
 
 # Maquina-v7
 
-### ☁️ Cloud PC GNU/Linux con Selkies (WebRTC) en Google Colab — controla tu escritorio remoto desde el navegador vía Tailscale
+### ☁️ Cloud PC GNU/Linux con Sunshine (NVENC) + Moonlight en Google Colab — juega en Android con latencia ~10-15 ms
 
 [![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/jephersonRD/Maquina-v7/blob/main/Maquina-v7.ipynb)
 [![GitHub Stars](https://img.shields.io/github/stars/jephersonRD/Maquina-v7?style=social)](https://github.com/jephersonRD/Maquina-v7/stargazers)
@@ -13,9 +13,9 @@
 [![Last Commit](https://img.shields.io/github/last-commit/jephersonRD/Maquina-v7)](https://github.com/jephersonRD/Maquina-v7/commits/main)
 
 ![Plataform](https://img.shields.io/badge/platform-Google%20Colab-blue)
-![WebRTC](https://img.shields.io/badge/access-WebRTC%20%2F%20Selkies-blue)
-![Android](https://img.shields.io/badge/client-Android%20Ready-purple)
-![Tailscale](https://img.shields.io/badge/network-Tailscale-0brand)
+![Streaming](https://img.shields.io/badge/engine-Sunshine%20%2F%20NVENC-blue)
+![Client](https://img.shields.io/badge/client-Moonlight%20Android-purple)
+![Network](https://img.shields.io/badge/transport-Tailscale%20(UDP)-0brand)
 
 </div>
 
@@ -24,30 +24,35 @@
 ## 📖 Descripción
 
 **Maquina-v7** convierte una sesión de **Google Colab** en un **escritorio remoto GNU/Linux**
-(XFCE + `Selkies`) al que te conectas desde el **navegador** (Chrome, Edge, Firefox) en
-**Android**, Windows o macOS. La conexión se expone vía un **túnel público de cloudflared**
-(URL HTTPS lista para usar); **Tailscale es opcional** y ya no se requiere. El puerto 8080 no
-queda abierto directamente a Internet.
+(KDE Plasma + `Sunshine`) que codifica el vídeo con **NVENC en la GPU T4** y se reproduce en
+**Moonlight** (app nativa de Android). La **Web UI** de Sunshine se expone vía un **túnel público
+de cloudflared** (HTTPS) para leer el PIN de emparejamiento; el **stream real de Moonlight** viaja
+por **UDP** (Tailscale, ya que cloudflared solo tuneliza HTTP/TCP).
+
+### ¿Por qué Sunshine + Moonlight y no Selkies/XRDP?
+- **NVENC en la T4**: codificación por hardware, casi **0% de CPU**.
+- **Latencia de ~10-15 ms** (vs. decenas de ms del WebRTC por navegador).
+- **App nativa de Android** (Moonlight) muy pulida, con gamepad y 1080p/60fps.
+- Estándar de facto para cloud gaming casero.
 
 ## ▶️ Código para Colab (copiar y pegar)
 
 Pega **este único bloque** en una celda de Google Colab y ejecútalo. Descarga el proyecto
-como tarball desde GitHub (sin `git` ni credenciales) y los paquetes apt/Tailscale. Antes de
-ejecutar, pega tu **authkey** de Tailscale en la variable `TS_AUTHKEY` (línea marcada). Al final
-muestra la **URL, usuario y contraseña** listos para abrir en el navegador.
+como tarball desde GitHub (sin `git` ni credenciales). Al final muestra la **URL de la Web UI**
+y la **IP para Moonlight**.
 
 ```python
-# ===== Maquina-v7 (Selkies / WebRTC en vez de XRDP) =====
-# Cloud PC Linux (XFCE + Selkies) accesible desde el navegador via túnel cloudflared en Google Colab.
-# Pega ESTE bloque completo en una celda de Colab y ejecutalo.
+# ===== Maquina-v7 (Sunshine + Moonlight en vez de Selkies/XRDP) =====
 import subprocess, os
 
 # ====== CONFIGURACION ======
 USERNAME   = "jeph"
 PASSWORD   = "medina"
 RESOLUTION = "1920x1080"
-PORT       = "8080"
-# Acceso por túnel público cloudflared (Tailscale es opcional, ya no requerido).
+WEB_PORT   = "47989"
+# Tailscale = transporte UDP que necesita Moonlight. Pega tu authkey de
+# https://login.tailscale.com/admin/settings/keys (o deja "" si usas otra VPN UDP).
+TS_AUTHKEY = ""
 # ===================================================
 
 repo_dir = "/content/Maquina-v7"
@@ -61,10 +66,16 @@ if not os.path.isdir(repo_dir):
     os.remove("/tmp/maquina-v7.tar.gz")
 os.chdir(repo_dir + "/scripts")
 
-print("Ejecutando instalador Selkies (puede tardar varios minutos)...\n")
-r = subprocess.run(f"bash setup_selkies.sh {USERNAME} {PASSWORD} {RESOLUTION} {PORT}", shell=True)
+print("Ejecutando instalador Sunshine (puede tardar varios minutos)...\n")
+r = subprocess.run(f"bash setup_sunshine.sh {USERNAME} {PASSWORD} {RESOLUTION} {WEB_PORT}", shell=True)
 if r.returncode != 0:
-    print("\n❌❌ setup_selkies.sh termino con error."); raise SystemExit(r.returncode)
+    print("\n❌❌ setup_sunshine.sh termino con error."); raise SystemExit(r.returncode)
+
+ip = ""
+if TS_AUTHKEY:
+    print("Conectando a Tailscale (transporte UDP para Moonlight)...")
+    subprocess.run(f'bash setup_tailscale.sh "{TS_AUTHKEY}"', shell=True)
+    ip = subprocess.run("tailscale ip -4 2>/dev/null | head -n1", shell=True, capture_output=True, text=True).stdout.strip()
 
 import re, time
 url = ""
@@ -76,70 +87,71 @@ for _ in range(45):
     time.sleep(1)
 
 print("\n========================================")
-print("✅ MAQUINA LISTA (Selkies / WebRTC)")
+print("✅ MAQUINA LISTA (Sunshine + Moonlight / NVENC)")
 if url:
-    print("🌐 URL pública   :", url)
+    print("🌐 WEB UI (PIN)  :", url)
+    print("   Usuario       :", USERNAME, " | Contraseña:", PASSWORD)
+if ip:
+    print("🎮 Moonlight IP :", ip, "(agrega en Moonlight y empareja con el PIN)")
 else:
-    print("🌐 URL cloudflared: no disponible aún (revisa /tmp/cloudflared.log)")
-print("👤 USUARIO       :", USERNAME)
-print("🔑 CONTRASEÑA     :", PASSWORD)
+    print("🎮 Moonlight     : usa la IP de Tailscale (o tu VPN UDP) de esta maquina.")
 print("========================================")
-print("Abre esa URL en Chrome/Edge/Firefox. El certificado es autofirmado: continua.")
+print("Abre la WEB UI en el navegador, ve a 'PIN', y empareja Moonlight con ese codigo.")
 ```
 
-> 💡 El script **no termina con `returncode=0` si algo falló**: revisa
-> `tail -n 40 /tmp/selkies.log` y los mensajes de arriba. Al final imprime la
-> **URL pública de cloudflared** (https://...trycloudflare.com) con usuario y contraseña.
+### 📱 Conectarte desde Moonlight (Android)
 
-### 🌐 Conectarte desde el navegador (Chrome / Edge / Firefox)
+1. Ejecuta la celda de instalación: al terminar muestra la **URL de la Web UI** (cloudflared).
+2. Abre esa URL en el navegador de tu móvil/PC e inicia sesión con **usuario** y **contraseña**.
+3. En la Web UI de Sunshine ve a **PIN** y anota el código que aparece.
+4. Instala **Moonlight** en Android y agrega la **IP de Tailscale** de esta máquina.
+5. Moonlight pedirá el PIN: introduce el de la Web UI. ¡Listo para jugar!
 
-1. Ejecuta la celda de instalación: al terminar muestra una **URL pública**
-   `https://<random>.trycloudflare.com`. También la muestra la celda **URL de acceso**.
-2. Abre esa URL en el navegador (móvil o PC).
-3. La URL de cloudflared ya es **HTTPS válido** (lo termina Cloudflare), así que el navegador no avisa.
-4. Inicia sesión con **usuario** `jeph` y **contraseña** `medina`.
-5. (Opcional) Si prefieres **Tailscale** en vez de cloudflared, descomenta las líneas de la
-   celda "URL de acceso" y usa `https://<IP_Tailscale>:8080`.
+> 💡 ¿Sin Tailscale? Moonlight necesita **UDP** para transmitir. cloudflared solo expone la
+> Web UI (HTTP). Usa Tailscale (opción recomendada) o cualquier VPN/túnel que transporte UDP.
 
 ### ⚠️ No cierres la pestaña
 Colab mata la sesión si cierras la pestaña. Mantenla abierta (puedes minimizarla).
 
 ## ✨ Características
 
-- 🖥️ **Escritorio XFCE** completo con `Selkies` (HTML5 + WebRTC).
-- 📱 **Cliente**: cualquier navegador moderno (Chrome, Edge, Firefox) en Android, PC o macOS.
-- 🔐 **Tailscale**: red privada segura, el puerto 8080 (HTTPS) NO se expone a Internet.
+- 🖥️ **Escritorio KDE Plasma** completo con `Sunshine` (codificación **NVENC** en la T4).
+- 📱 **Cliente**: **Moonlight** en Android / PC (app nativa, gamepad, 1080p/60fps).
+- 🔐 **Tailscale**: transporte UDP seguro para el stream (cloudflared solo para la Web UI).
 - 🔒 **Keep-alive**: evita el cierre por inactividad de Colab.
 - 📦 **100% open-source**: scripts propios, sin binarios cerrados.
 
 ## 🏗️ Arquitectura
 
 ```
- Tu Android / PC (con Tailscale en la misma cuenta)
-        │  WebRTC/HTTPS (8080) sobre túnel cloudflared
-       ▼
-  ┌──────────────────────────────────┐
-  │  Google Colab (contenedor Linux) │
-  │   ├─ XFCE desktop                     │
-  │   ├─ Selkies (servidor WebRTC/HTTPS:8080) │
-  │   └─ Tailscale (VPN mesh)        │
-  └──────────────────────────────────┘
+ Tu Android (Moonlight)  ←─ UDP (Tailscale) ──┐
+        │  Stream NVENC (bajo latency)        │
+        │                                     ▼
+   ┌─────────────────────────────────────────────────────┐
+   │  Google Colab (contenedor Linux)                     │
+   │   ├─ KDE Plasma desktop (Xvfb :0)                    │
+   │   ├─ Sunshine (servidor, capture=x11, encoder=nvenc) │
+   │   └─ cloudflared → Web UI HTTPS (PIN)                │
+   └─────────────────────────────────────────────────────┘
 ```
 
 ## ⚠️ Recomendaciones
 
 - Revisa el tiempo restante de uso de Colab (se reinicia cada ~24 h).
 - Mantén la pestaña visible/activa.
-- El gaming solo funciona si Colab asigna GPU.
+- El gaming solo funciona si Colab asigna GPU (NVENC).
+- En Xvfb usamos captura `x11` + codificación `nvenc` (nvfbc no funciona con Xvfb, que es
+  software). La carga de CPU de captura es mínima; toda la codificación va en la T4.
 
 ## 🐛 Solución de problemas
 
 | Síntoma | Solución |
 |---------|----------|
-| `0x300005e` (ya no aplica, era de RDP) | Selkies usa navegador; asegura Tailscale con la misma cuenta en el cliente. |
-| No abre la página | Verifica la IP de Tailscale y que el puerto 8080 está en escucha (`ss -ltn | grep 8080`). |
+| Moonlight no encuentra la máquina | Usa la **IP de Tailscale** (UDP). cloudflared no lleva el stream. |
+| Web UI no abre | Verifica la URL `https://<random>.trycloudflare.com` y que el puerto 47989 escucha (`ss -ltn \| grep 47989`). |
+| Sin GPU / NVENC | Sunshine cae a `libx264` (CPU). Revisa `nvidia-smi`. |
+| 47989 no escucha | Revisa `tail -n 40 /tmp/sunshine.log`. |
 | Tailscale no conecta | Confirma la authkey y **aprueba** `maquina-v7` en login.tailscale.com → Devices. |
-| 8080 no escucha | Revisa `tail -n 40 /tmp/selkies.log`. |
 
 ## 📜 Licencia
 

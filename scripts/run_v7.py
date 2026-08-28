@@ -99,7 +99,7 @@ def _ensure_scripts():
     base = "/content/Maquina-v7"
     sd = os.path.join(base, "scripts")
     os.makedirs(sd, exist_ok=True)
-    for s in ["setup_rdp.sh", "setup_tailscale.sh", "install_steam.sh"]:
+    for s in ["setup_sunshine.sh", "setup_tailscale.sh", "install_steam.sh"]:
         url = f"https://raw.githubusercontent.com/jephersonRD/Maquina-v7/main/scripts/{s}"
         print(f"   ↳ descargando {s} ...")
         subprocess.run(f"curl -fsSL {url} -o {os.path.join(sd, s)}",
@@ -113,24 +113,23 @@ def _start_cloudflared():
         "curl -fsSL# https://github.com/cloudflare/cloudflared/releases/latest/download/"
         "cloudflared-linux-amd64 -o /usr/local/bin/cloudflared && chmod +x /usr/local/bin/cloudflared",
         shell=True, check=False)
-    print("   ↳ abriendo túnel público TCP -> 8080 (espera ~10s)...")
-    proc = subprocess.Popen("cloudflared tunnel --url tcp://localhost:8080",
+    print("   ↳ abriendo túnel público a la Web UI de Sunshine -> 47989 (espera ~10s)...")
+    proc = subprocess.Popen("cloudflared tunnel --url http://localhost:47989",
                              shell=True, stdout=subprocess.PIPE,
                              stderr=subprocess.STDOUT, text=True)
     found = {}
     def _reader():
         for line in proc.stdout:
             print("   cloudflared:", line.rstrip())
-            m = re.search(r'tcp://([A-Za-z0-9.\-]+):(\d+)', line)
-            if m and "host" not in found:
-                found["host"] = m.group(1)
-                found["port"] = m.group(2)
+            m = re.search(r'(https://[A-Za-z0-9.\-]+\.trycloudflare\.com)', line)
+            if m and "url" not in found:
+                found["url"] = m.group(1)
     threading.Thread(target=_reader, daemon=True).start()
     for _ in range(45):
-        if "host" in found:
+        if "url" in found:
             break
         time.sleep(1)
-    return found.get("host"), found.get("port")
+    return found.get("url")
 
 
 def main():
@@ -141,7 +140,7 @@ def main():
     STEAM = os.environ.get("MV7_STEAM", "1") == "1"
 
     print("╔" + "═" * 56)
-    print("║   MAQUINA-v7  ·  Cloud PC Linux + Selkies (WebRTC) en Google Colab")
+    print("║   MAQUINA-v7  ·  Cloud PC Linux + Sunshine (NVENC) + Moonlight en Google Colab")
     print("╚" + "═" * 56)
     _keepalive()
 
@@ -149,8 +148,8 @@ def main():
     sd = _ensure_scripts()
     os.chdir(sd)
 
-    _bar(40, "INSTALANDO XFCE + Selkies")
-    _run_spin(f"bash setup_selkies.sh {USERNAME} {PASSWORD} 1920x1080 8080",
+    _bar(40, "INSTALANDO KDE Plasma + Sunshine (NVENC)")
+    _run_spin(f"bash setup_sunshine.sh {USERNAME} {PASSWORD} 1920x1080 47989",
               label="instalando escritorio (2-5 min)")
 
     _bar(60, "CONFIGURANDO RED / TÚNEL")
@@ -160,13 +159,14 @@ def main():
         out = subprocess.run("tailscale ip -4 2>/dev/null | head -n1",
                              shell=True, capture_output=True, text=True).stdout.strip()
         if out:
-            host, port = out, "8080"
-            print("   ✅ Tailscale conectado. IP:", host)
+            host, port = out, "47989"
+            print("   ✅ Tailscale conectado. IP (para Moonlight):", host)
         else:
             print("   ⚠️ Tailscale NO conectó. Revisa el authkey arriba y tu")
             print("      lista de dispositivos en https://login.tailscale.com")
     elif NET == "2":
-        host, port = _start_cloudflared()
+        host = _start_cloudflared()
+        port = ""
     else:
         print("   ℹ️ solo local.")
 
@@ -178,22 +178,30 @@ def main():
 
     _bar(100, "LISTO")
     print("\n" + "=" * 56)
-    print("  ✅ MAQUINA-v7 LISTA")
+    print("  ✅ MAQUINA-v7 LISTA (Sunshine + Moonlight / NVENC)")
     print("  Usuario : " + USERNAME)
-    print("  Puerto local: 8080 (HTTPS)")
-    if host and port:
+    print("  Puerto Web UI local: 47989")
+    if NET == "1" and host:
         print("-" * 56)
-        print("  🌐 ABRE ESTO EN EL NAVEGADOR (Chrome/Edge/Firefox):")
-        print("     https://" + host + ":" + port)
-        print("     Usuario : " + USERNAME)
-        print("     (o directo: https://" + host + ":" + port + ")")
+        print("  🎮 Moonlight: agrega esta IP en la app Android:")
+        print("     " + host)
+        print("     Web UI (PIN): http://" + host + ":47989  (usuario: " + USERNAME + ")")
         with open("/content/Maquina-v7/CONEXION.txt", "w") as f:
-            f.write(f"https://{host}:{port} | usuario: {USERNAME}\n")
+            f.write(f"Moonlight IP: {host} | Web UI: http://{host}:47989 | usuario: {USERNAME}\n")
+    elif NET == "2" and host:
+        print("-" * 56)
+        print("  🌐 WEB UI (para leer el PIN de emparejamiento):")
+        print("     " + host)
+        print("  ⚠️ cloudflared solo expone la Web UI (HTTP). Para que Moonlight")
+        print("     transmita (UDP) usa Tailscale (opción de red 1) u otra VPN UDP.")
+        with open("/content/Maquina-v7/CONEXION.txt", "w") as f:
+            f.write(f"Web UI: {host} | usuario: {USERNAME}\n")
     else:
         local = subprocess.run("hostname -I 2>/dev/null", shell=True,
                                capture_output=True, text=True).stdout.strip()
-        print("  [!] Sin red/túnel: no accesible desde Android. IP local: " + str(local))
+        print("  [!] Sin red/túnel UDP: Moonlight no puede transmitir. IP local: " + str(local))
     print("=" * 56)
+    print("  📱 Moonlight: abre la Web UI, ve a 'PIN', y empareja con ese código.")
     print("  ⚠️ No CIERRES la pestaña de Colab (mínimala, no la cierres).")
 
 

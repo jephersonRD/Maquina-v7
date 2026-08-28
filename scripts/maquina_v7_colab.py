@@ -1,19 +1,19 @@
-# ===== Maquina-v7 (Selkies / WebRTC en vez de XRDP) =====
-# Cloud PC Linux (XFCE + Selkies) accesible desde el navegador via Tailscale en Google Colab.
+# ===== Maquina-v7 (Sunshine + Moonlight en vez de Selkies/XRDP) =====
+# Cloud PC Linux (KDE Plasma + Sunshine) que codifica con NVENC en la GPU T4 y se
+# reproduce en Moonlight (app nativa de Android). La Web UI se expone por cloudflared
+# (HTTPS) para leer el PIN; el stream UDP de Moonlight va por Tailscale.
 # Pega ESTE bloque completo en una celda de Colab y ejecutalo.
 import subprocess, os
 
-# ====== CONFIGURACION (edita solo TS_AUTHKEY) ======
-TS_AUTHKEY = "PEG_AQUI_TU_TAILSCALE_AUTHKEY"   # <-- pega tu authkey de https://login.tailscale.com/admin/settings/keys
+# ====== CONFIGURACION ======
 USERNAME   = "jeph"
 PASSWORD   = "medina"
 RESOLUTION = "1920x1080"
-PORT       = "8080"
+WEB_PORT   = "47989"
+# Tailscale es el transporte UDP que necesita Moonlight (cloudflared solo expone la Web UI).
+# Pega tu authkey de https://login.tailscale.com/admin/settings/keys (o deja vacio si usas otra VPN/UDP).
+TS_AUTHKEY = ""
 # ===================================================
-
-if TS_AUTHKEY in ("", "PEG_AQUI_TU_TAILSCALE_AUTHKEY"):
-    print("Debes pegar tu Tailscale authkey en la variable TS_AUTHKEY (arriba).")
-    raise SystemExit(1)
 
 repo_dir = "/content/Maquina-v7"
 if not os.path.isdir(repo_dir):
@@ -26,21 +26,35 @@ if not os.path.isdir(repo_dir):
     os.remove("/tmp/maquina-v7.tar.gz")
 os.chdir(repo_dir + "/scripts")
 
-print("Ejecutando instalador Selkies (puede tardar varios minutos)...\n")
-r = subprocess.run(f"bash setup_selkies.sh {USERNAME} {PASSWORD} {RESOLUTION} {PORT}", shell=True)
+print("Ejecutando instalador Sunshine (puede tardar varios minutos)...\n")
+r = subprocess.run(f"bash setup_sunshine.sh {USERNAME} {PASSWORD} {RESOLUTION} {WEB_PORT}", shell=True)
 if r.returncode != 0:
-    print("\n❌❌ setup_selkies.sh termino con error."); raise SystemExit(r.returncode)
+    print("\n❌❌ setup_sunshine.sh termino con error."); raise SystemExit(r.returncode)
 
-print("Conectando a Tailscale...")
-r = subprocess.run(f'bash setup_tailscale.sh "{TS_AUTHKEY}"', shell=True)
-if r.returncode != 0:
-    print("\n❌❌ setup_tailscale.sh termino con error."); raise SystemExit(r.returncode)
+ip = ""
+if TS_AUTHKEY:
+    print("Conectando a Tailscale (transporte UDP para Moonlight)...")
+    r = subprocess.run(f'bash setup_tailscale.sh "{TS_AUTHKEY}"', shell=True)
+    if r.returncode == 0:
+        ip = subprocess.run("tailscale ip -4 2>/dev/null | head -n1", shell=True, capture_output=True, text=True).stdout.strip()
 
-ip = subprocess.run("tailscale ip -4 2>/dev/null | head -n1", shell=True, capture_output=True, text=True).stdout.strip()
+import re, time
+url = ""
+for _ in range(45):
+    log = subprocess.run("tail -n 200 /tmp/cloudflared.log 2>/dev/null", shell=True, capture_output=True, text=True).stdout
+    m = re.search(r'https://[a-zA-Z0-9._-]+\.trycloudflare\.com', log)
+    if m:
+        url = m.group(0); break
+    time.sleep(1)
+
 print("\n========================================")
-print("✅ MAQUINA LISTA (Selkies / WebRTC)")
-print("🌐 URL navegador : https://%s:%s" % (ip, PORT))
-print("👤 USUARIO       :", USERNAME)
-print("🔑 CONTRASEÑA     :", PASSWORD)
+print("✅ MAQUINA LISTA (Sunshine + Moonlight / NVENC)")
+if url:
+    print("🌐 WEB UI (PIN)  :", url)
+    print("   Usuario       :", USERNAME, " | Contraseña:", PASSWORD)
+if ip:
+    print("🎮 Moonlight IP :", ip, "(agrega esta IP en Moonlight y empareja con el PIN)")
+else:
+    print("🎮 Moonlight     : usa la IP de Tailscale (o tu VPN UDP) de esta maquina.")
 print("========================================")
-print("Abre esa URL en Chrome/Edge/Firefox. Si el certificado es autofirmado, continua.")
+print("Abre la WEB UI en el navegador, ve a 'PIN', y empareja Moonlight con ese codigo.")

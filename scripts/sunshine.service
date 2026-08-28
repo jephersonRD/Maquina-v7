@@ -1,0 +1,20 @@
+[Unit]
+Description=Sunshine Game Streaming Server (KDE Plasma + Xvfb, NVENC)
+After=network.target
+
+[Service]
+# Ajusta estas variables al crear la VM
+Environment=SUN_USER=v7user
+Environment=SUN_PASSWORD=v7pass
+Environment=SUN_RESOLUTION=1920x1080
+Environment=SUN_WEB_PORT=47989
+Environment=DISPLAY=:0
+Environment=XDG_RUNTIME_DIR=/tmp
+Type=simple
+User=v7user
+ExecStart=/opt/sunshine/sunshine-launch.sh
+Restart=always
+RestartSec=3
+
+[Install]
+WantedBy=multi-user.target
