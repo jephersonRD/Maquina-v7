@@ -127,15 +127,30 @@ export PULSE_SERVER="${PULSE_SERVER}"
 
 # Detectar comando de Selkies
 SELKIES_CMD=""
-if command -v selkies-gstreamer >/dev/null 2>&1; then
-  SELKIES_CMD="selkies-gstreamer"
-elif command -v selkies >/dev/null 2>&1; then
-  SELKIES_CMD="selkies"
-else
+for cmd in selkies-gstreamer selkies; do
+  if command -v "$cmd" >/dev/null 2>&1; then
+    SELKIES_CMD="$cmd"
+    break
+  fi
+done
+
+if [ -z "$SELKIES_CMD" ]; then
   echo "      ❌ Selkies no encontrado"
-  echo "      Ejecuta: bash setup_selkies.sh"
-  exit 1
+  echo "      Instalando Selkies..."
+  bash "$(dirname "$0")/setup_selkies.sh" || { echo "❌ Fallo al instalar Selkies"; exit 1; }
+  # Re-detectar después de instalar
+  for cmd in selkies-gstreamer selkies; do
+    if command -v "$cmd" >/dev/null 2>&1; then
+      SELKIES_CMD="$cmd"
+      break
+    fi
+  done
+  if [ -z "$SELKIES_CMD" ]; then
+    echo "      ❌ Selkies no disponible"
+    exit 1
+  fi
 fi
+echo "      📦 Selkies: $SELKIES_CMD"
 
 # Construir comando de Selkies
 SELKIES_ARGS="--addr=0.0.0.0 --port=${PORT}"
