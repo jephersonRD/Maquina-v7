@@ -14,7 +14,7 @@ apt-get update -y || { echo "❌ apt-get update falló"; exit 1; }
 
 echo "🖥️ [2/6] Instalando KDE Plasma, Xorg y dependencias..."
 apt-get install -y \
-  kde-plasma-desktop xorg x11-xserver-utils xauth dbus-x11 \
+  kde-plasma-desktop xorg x11-xserver-utils xauth dbus-x11 xvfb \
   openssl ca-certificates curl wget \
   libx11-6 libxrandr2 libxinerama1 libxcursor1 libxi6 libxtst6 \
   || { echo "❌ fallo al instalar el escritorio"; exit 1; }
@@ -69,12 +69,35 @@ key_file=
 EOF
 
 # Script de inicio de sesión que lanza KDE
-cat > /etc/xrdp/startwm.sh <<EOF
+cat > /etc/xrdp/startwm.sh <<'EOF'
 #!/bin/bash
+# Configurar variables de entorno
 export XDG_SESSION_TYPE=x11
 export XDG_CURRENT_DESKTOP=KDE
 export DESKTOP_SESSION=plasma
-export DISPLAY=:10
+export DISPLAY=${DISPLAY:-:10}
+
+# Si no hay display activo, iniciar Xvfb
+if ! xdpyinfo -display "$DISPLAY" >/dev/null 2>&1; then
+    echo "Iniciando Xvfb en $DISPLAY..."
+    Xvfb "$DISPLAY" -screen 0 1920x1080x24 -ac +extension GLX +render -noreset &
+    XVFB_PID=$!
+    sleep 2
+    
+    # Esperar a que Xvfb esté listo
+    for i in {1..10}; do
+        if xdpyinfo -display "$DISPLAY" >/dev/null 2>&1; then
+            echo "Xvfb listo"
+            break
+        fi
+        sleep 1
+    done
+fi
+
+# Exportar DISPLAY para KDE
+export DISPLAY="$DISPLAY"
+
+# Iniciar KDE Plasma
 exec dbus-launch startplasma-x11
 EOF
 chmod +x /etc/xrdp/startwm.sh
@@ -86,7 +109,20 @@ echo "🚀 [6/6] Iniciando servicios XRDP..."
 # Matar procesos previos
 pkill -x xrdp 2>/dev/null || true
 pkill -x xrdp-sesman 2>/dev/null || true
+pkill -x Xvfb 2>/dev/null || true
 sleep 1
+
+# Iniciar Xvfb en background para display virtual
+echo "   ↳ Iniciando Xvfb (display virtual)..."
+Xvfb :10 -screen 0 1920x1080x24 -ac +extension GLX +render -noreset &
+sleep 2
+
+# Verificar que Xvfb esté corriendo
+if xdpyinfo -display :10 >/dev/null 2>&1; then
+  echo "   ✅ Xvfb corriendo en display :10"
+else
+  echo "   ⚠️ Xvfb podría no estar listo"
+fi
 
 # En Google Colab NO hay systemd, así que iniciamos los binarios directamente
 echo "   ↳ Iniciando xrdp-sesman..."
