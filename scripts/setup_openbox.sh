@@ -103,10 +103,6 @@ cat > ~/.config/openbox/rc.xml << 'OBEOF'
   </keyboard>
   <mouse>
     <context name="Frame">
-      <mousebind button="A-F3" action="Press">
-        <action name="Focus"/>
-        <action name="Raise"/>
-      </mousebind>
       <mousebind button="A-Button1" action="Drag">
         <action name="Move"/>
       </mousebind>

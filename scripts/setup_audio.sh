@@ -37,8 +37,6 @@ resample-method = speex-float-3
 default-sample-format = s16le
 default-sample-rate = 48000
 default-sample-channels = 2
-default-fragment-msecs = 20
-default-fragment-size-msecs = 20
 PAEOF
 
 # Crear script de inicio de PulseAudio

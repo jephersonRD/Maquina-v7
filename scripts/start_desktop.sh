@@ -127,12 +127,13 @@ export PULSE_SERVER="${PULSE_SERVER}"
 
 # Detectar comando de Selkies
 SELKIES_CMD=""
-if command -v selkies >/dev/null 2>&1; then
+if command -v selkies-gstreamer >/dev/null 2>&1; then
+  SELKIES_CMD="selkies-gstreamer"
+elif command -v selkies >/dev/null 2>&1; then
   SELKIES_CMD="selkies"
-elif [ -f /usr/local/bin/selkies-appimage ]; then
-  SELKIES_CMD="/usr/local/bin/selkies-appimage"
 else
   echo "      ❌ Selkies no encontrado"
+  echo "      Ejecuta: bash setup_selkies.sh"
   exit 1
 fi
 

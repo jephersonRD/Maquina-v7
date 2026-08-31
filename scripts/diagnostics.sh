@@ -104,11 +104,11 @@ echo ""
 # 6. Selkies
 echo "【6. Selkies】"
 SELKIES_FOUND=false
-if command -v selkies >/dev/null 2>&1; then
-  echo "   ✅ Selkies instalado: $(which selkies)"
+if command -v selkies-gstreamer >/dev/null 2>&1; then
+  echo "   ✅ Selkies instalado: $(which selkies-gstreamer)"
   SELKIES_FOUND=true
-elif [ -f /usr/local/bin/selkies-appimage ]; then
-  echo "   ✅ Selkies AppImage: /usr/local/bin/selkies-appimage"
+elif command -v selkies >/dev/null 2>&1; then
+  echo "   ✅ Selkies instalado: $(which selkies)"
   SELKIES_FOUND=true
 fi
 
