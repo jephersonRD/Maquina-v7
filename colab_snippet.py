@@ -6,6 +6,8 @@ USERNAME   = "user"
 PASSWORD   = "password"
 RESOLUTION = "1920x1080"
 PORT       = 8080
+USE_TAILSCALE = False  # Cambiar a True para acceso remoto
+TAILSCALE_AUTHKEY = "tskey-auth-kHmbnmbDji11CNTRL-ogppCQkj3CVv1NhZniZ2CVJ7SzBuhnQx"
 # ===================================================
 
 # Descargar repositorio si no existe
@@ -37,6 +39,11 @@ run_script("setup_openbox.sh", "📦 Instalando Openbox")
 run_script("setup_audio.sh", "🔊 Configurando audio")
 run_script("setup_selkies.sh", "🌐 Instalando Selkies")
 
+if USE_TAILSCALE:
+    run_script(f"setup_tailscale.sh {TAILSCALE_AUTHKEY}", "🌐 Instalando Tailscale")
+else:
+    print("\n⏭️  Tailscale omitido (USE_TAILSCALE = False)")
+
 # Iniciar escritorio
 print("\n" + "="*50)
 print("🚀 Iniciando escritorio")
@@ -53,5 +60,15 @@ print("="*50)
 print(f"   Usuario    : {USERNAME}")
 print(f"   Resolución : {RESOLUTION}")
 print(f"   Puerto     : {PORT}")
-print(f"\n🌐 Abre en tu navegador: http://localhost:{PORT}")
+
+if USE_TAILSCALE:
+    import subprocess
+    ts_ip = subprocess.getoutput("tailscale --socket=/var/run/tailscale/tailscaled.sock ip -4 2>/dev/null | head -n1").strip()
+    if ts_ip:
+        print(f"\n🌐 Abre en tu navegador (desde tu Android/misma tailnet):")
+        print(f"   http://{ts_ip}:{PORT}")
+    else:
+        print(f"\n⚠️  Tailscale no conectó. URL local: http://localhost:{PORT}")
+else:
+    print(f"\n🌐 URL local (solo Colab): http://localhost:{PORT}")
 print("="*50)

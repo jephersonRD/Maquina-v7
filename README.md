@@ -48,6 +48,7 @@ Google Colab
 - **GPU acceleration**: NVENC (NVIDIA) o fallback a software (CPU).
 - **Audio nativo**: captura de audio del sistema via PulseAudio.
 - **Simple**: sin configuración compleja de red o VPN.
+- **Acceso remoto**: incluye soporte Tailscale para acceder desde cualquier dispositivo en tu tailnet.
 
 ## ▶️ Cómo usar
 
@@ -56,7 +57,7 @@ Google Colab
 1. Abre el notebook en Colab usando el botón de arriba
 2. Selecciona **Runtime → Change runtime type → GPU**
 3. Ejecuta las celdas en orden:
-   - ⚙️ Configuración
+   - ⚙️ Configuración (activa Tailscale si quieres acceso remoto)
    - 📦 Instalar
    - 🚀 Iniciar
 4. Abre la URL que aparece en el navegador
@@ -131,16 +132,21 @@ Browser
 
 | Plataforma | Cómo acceder |
 |------------|--------------|
-| **Cualquier dispositivo** | Abre `http://<URL>:8080` en el navegador |
-| **Android** | Chrome o cualquier navegador |
-| **iOS** | Safari o Chrome |
-| **Windows/Linux/Mac** | Chrome, Firefox, Edge |
+| **Con Tailscale** | Abre `http://<tailscale-ip>:8080` desde cualquier dispositivo en la misma tailnet |
+| **Sin Tailscale** | Solo funciona localmente en Colab: `http://localhost:8080` |
+
+### Acceso desde Android/iOS con Tailscale
+
+1. Activa `USE_TAILSCALE = True` en la celda de Configuración
+2. Instala Tailscale en tu Android/iOS
+3. Conecta a la misma tailnet (usa la misma cuenta)
+4. Abre `http://<tailscale-ip>:8080` en Chrome/Safari
 
 ## ⚠️ Importante
 
 - **No cierres la pestaña de Colab** si deseas mantener la sesión activa.
 - **Selecciona GPU** en Runtime → Change runtime type para mejor rendimiento.
-- **La URL es local**: solo funciona en la misma máquina. Para acceso externo, usa Tailscale o similar.
+- **La URL es local**: solo funciona en la misma máquina. Activa Tailscale para acceso externo desde Android/u otros dispositivos.
 
 ## 🐛 Solución de problemas
 
