@@ -83,13 +83,27 @@ chmod +x /etc/xrdp/startwm.sh
 rm -rf /tmp/.X11-unix/X10 /tmp/.X10-lock 2>/dev/null || true
 
 echo "🚀 [6/6] Iniciando servicios XRDP..."
-service xrdp stop 2>/dev/null || true
-service xrdp-sesman stop 2>/dev/null || true
+# Matar procesos previos
+pkill -x xrdp 2>/dev/null || true
+pkill -x xrdp-sesman 2>/dev/null || true
 sleep 1
-service xrdp-sesman start || { echo "❌ xrdp-sesman no arrancó"; exit 1; }
-service xrdp start || { echo "❌ xrdp no arrancó"; exit 1; }
+
+# En Google Colab NO hay systemd, así que iniciamos los binarios directamente
+echo "   ↳ Iniciando xrdp-sesman..."
+/usr/sbin/xrdp-sesman || { echo "❌ xrdp-sesman no arrancó"; exit 1; }
+sleep 1
+
+echo "   ↳ Iniciando xrdp..."
+/usr/sbin/xrdp || { echo "❌ xrdp no arrancó"; exit 1; }
 
 sleep 3
+
+# Verificar que estén escuchando
+if ss -ltn 2>/dev/null | grep -q ':3389'; then
+  echo "   ✅ XRDP escuchando en puerto 3389"
+else
+  echo "   ⚠️ XRDP podría no estar escuchando aún. Verifica con: ss -ltn | grep 3389"
+fi
 
 echo ""
 echo "========================================"
