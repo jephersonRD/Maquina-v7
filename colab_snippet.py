@@ -1,49 +1,57 @@
-# ===== Maquina-v7 (KDE Plasma + XRDP + Tailscale) =====
-import subprocess, os
+# ===== Maquina-v7 (Openbox + Selkies) =====
+import os
 
 # ====== CONFIGURACION ======
-USERNAME   = "jeph"
-PASSWORD   = "medina"
+USERNAME   = "user"
+PASSWORD   = "password"
 RESOLUTION = "1920x1080"
-# Tailscale: pega tu authkey de https://login.tailscale.com/admin/settings/keys
-# (o déjalo en "" si prefieres escanear el QR manualmente)
-TS_AUTHKEY = ""
+PORT       = 8080
 # ===================================================
 
-repo_dir = "/content/Maquina-v7"
-if not os.path.isdir(repo_dir):
-    import tarfile, urllib.request
-    tar_url = "https://codeload.github.com/jephersonRD/Maquina-v7/tar.gz/refs/heads/main"
-    urllib.request.urlretrieve(tar_url, "/tmp/maquina-v7.tar.gz")
-    with tarfile.open("/tmp/maquina-v7.tar.gz") as t:
-        t.extractall("/content")
-    os.rename("/content/Maquina-v7-main", repo_dir)
-    os.remove("/tmp/maquina-v7.tar.gz")
-os.chdir(repo_dir + "/scripts")
+# Descargar repositorio si no existe
+if not os.path.isdir('/content/Maquina-v7'):
+    import subprocess
+    print("📥 Descargando repositorio...")
+    subprocess.run("curl -fsSL 'https://codeload.github.com/jephersonRD/Maquina-v7/tar.gz/refs/heads/main' -o /tmp/maquina-v7.tar.gz", shell=True, check=True)
+    subprocess.run("tar xzf /tmp/maquina-v7.tar.gz -C /content", shell=True, check=True)
+    subprocess.run("mv /content/Maquina-v7-main /content/Maquina-v7", shell=True, check=True)
+    subprocess.run("rm -f /tmp/maquina-v7.tar.gz", shell=True, check=True)
 
-print("Ejecutando instalador XRDP + KDE Plasma...\n")
-r = subprocess.run(f"bash setup_xrdp.sh {USERNAME} {PASSWORD} {RESOLUTION}", shell=True)
+os.chdir('/content/Maquina-v7/scripts')
+
+print("="*50)
+print("📦 Instalando Openbox + Selkies + Audio")
+print("="*50)
+
+# Instalar componentes
+import subprocess
+
+def run_script(script, desc):
+    print(f"\n{desc}...")
+    r = subprocess.run(f"bash {script}", shell=True)
+    if r.returncode != 0:
+        print(f"❌ Error en {script}")
+        raise SystemExit(r.returncode)
+
+run_script("setup_openbox.sh", "📦 Instalando Openbox")
+run_script("setup_audio.sh", "🔊 Configurando audio")
+run_script("setup_selkies.sh", "🌐 Instalando Selkies")
+
+# Iniciar escritorio
+print("\n" + "="*50)
+print("🚀 Iniciando escritorio")
+print("="*50)
+
+r = subprocess.run(f"bash start_desktop.sh {RESOLUTION} {USERNAME} {PASSWORD} {PORT}", shell=True)
 if r.returncode != 0:
-    print("\n❌❌ setup_xrdp.sh terminó con error."); raise SystemExit(r.returncode)
+    print("❌ Error al iniciar escritorio")
+    raise SystemExit(r.returncode)
 
-# Tailscale (para conectarte desde tu móvil/PC de forma segura)
-ip = ""
-if TS_AUTHKEY:
-    print("\nConectando a Tailscale...")
-    subprocess.run(f'bash setup_tailscale.sh "{TS_AUTHKEY}"', shell=True)
-    ip = subprocess.run("tailscale ip -4 2>/dev/null | head -n1", shell=True, capture_output=True, text=True).stdout.strip()
-
-print("\n========================================")
-print("✅ MÁQUINA LISTA (KDE Plasma + XRDP)")
-print("   Usuario      :", USERNAME)
-print("   Contraseña   :", PASSWORD)
-if ip:
-    print("   🌐 IP Tailscale :", ip, "(conéctate por RDP a este IP:3389)")
-else:
-    print("   🌐 Tailscale    : esperando conexión...")
-print("========================================")
-print("\n📱 En tu móvil/PC:")
-print("   1. Abre Microsoft Remote Desktop (o aRDP en Android)")
-print("   2. Agrega PC: IP-de-Tailscale:3389")
-print("   3. Usuario:", USERNAME, "| Contraseña:", PASSWORD)
-print("========================================")
+print("\n" + "="*50)
+print("✅ MAQUINA LISTA (Openbox + Selkies)")
+print("="*50)
+print(f"   Usuario    : {USERNAME}")
+print(f"   Resolución : {RESOLUTION}")
+print(f"   Puerto     : {PORT}")
+print(f"\n🌐 Abre en tu navegador: http://localhost:{PORT}")
+print("="*50)

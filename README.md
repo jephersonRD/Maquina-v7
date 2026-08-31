@@ -4,7 +4,7 @@
 
 # Maquina-v7
 
-### ☁️ Cloud PC GNU/Linux con KDE Plasma + XRDP + Tailscale en Google Colab
+### ☁️ Cloud PC Linux + Openbox + Selkies en Google Colab
 
 [![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/jephersonRD/Maquina-v7/blob/main/Maquina-v7.ipynb)
 [![GitHub Stars](https://img.shields.io/github/stars/jephersonRD/Maquina-v7?style=social)](https://github.com/jephersonRD/Maquina-v7/stargazers)
@@ -13,9 +13,9 @@
 [![Last Commit](https://img.shields.io/github/last-commit/jephersonRD/Maquina-v7)](https://github.com/jephersonRD/Maquina-v7/commits/main)
 
 ![Platform](https://img.shields.io/badge/platform-Google%20Colab-blue)
-![Desktop](https://img.shields.io/badge/desktop-KDE%20Plasma-blue)
-![Protocol](https://img.shields.io/badge/protocol-XRDP%20(RDP)-green)
-![Network](https://img.shields.io/badge/transport-Tailscale%20(TCP)-0brand)
+![Desktop](https://img.shields.io/badge/desktop-Openbox-light)
+![Remote](https://img.shields.io/badge/remote-Selkies-green)
+![Protocol](https://img.shields.io/badge/protocol-WebRTC/WebSocket-blueviolet)
 
 </div>
 
@@ -23,129 +23,153 @@
 
 ## 📖 Descripción
 
-**Maquina-v7** convierte una sesión de **Google Colab** en un **escritorio remoto GNU/Linux**
-con **KDE Plasma** y **XRDP** (protocolo RDP nativo). Conéctate de forma segura desde
-cualquier dispositivo usando **Tailscale**.
+**Maquina-v7** convierte una sesión de **Google Colab** en un **escritorio remoto GNU/Linux** accesible desde **cualquier navegador web** mediante **Selkies**.
 
-### ¿Por qué XRDP en vez de Sunshine/Moonlight?
-- **Sin GPU necesaria**: XRDP funciona perfectamente en CPU, sin necesidad de NVENC.
-- **Cualquier cliente RDP**: Microsoft Remote Desktop, aRDP, Remmina, xfreerdp.
-- **Más simple**: sin PIN de emparejamiento, solo usuario/contraseña.
-- **Transporte TCP**: más estable para escritorio/productividad que UDP.
-- **Sin cloudflared**: no necesitas exponer una Web UI.
+### Arquitectura
 
-## ▶️ Código para Colab (copiar y pegar)
+```
+Google Colab
+     ↓
+   Linux
+     ↓
+   Xvfb (display virtual)
+     ↓
+  Openbox (window manager)
+     ↓
+   Selkies (remote desktop)
+     ↓
+  Browser (acceso web)
+```
 
-Pega **este único bloque** en una celda de Google Colab y ejecútalo. Descarga el proyecto
-como tarball desde GitHub (sin `git` ni credenciales). Al final muestra la **IP para conectar por RDP**.
+### ¿Por qué Selkies en vez de XRDP/Sunshine?
+
+- **Sin cliente especializado**: accede desde cualquier navegador web.
+- **Baja latencia**: streaming WebRTC/WebSocket optimizado.
+- **GPU acceleration**: NVENC (NVIDIA) o fallback a software (CPU).
+- **Audio nativo**: captura de audio del sistema via PulseAudio.
+- **Simple**: sin configuración compleja de red o VPN.
+
+## ▶️ Cómo usar
+
+### Opción 1: Notebook (recomendado)
+
+1. Abre el notebook en Colab usando el botón de arriba
+2. Selecciona **Runtime → Change runtime type → GPU**
+3. Ejecuta las celdas en orden:
+   - ⚙️ Configuración
+   - 📦 Instalar
+   - 🚀 Iniciar
+4. Abre la URL que aparece en el navegador
+
+### Opción 2: Snippet (copiar y pegar)
+
+Pega este código en una celda de Google Colab:
 
 ```python
-# ===== Maquina-v7 (KDE Plasma + XRDP + Tailscale) =====
-import subprocess, os
+import os
 
-# ====== CONFIGURACION ======
-USERNAME   = "jeph"
-PASSWORD   = "medina"
+# Configuración
+USERNAME = "user"
+PASSWORD = "password"
 RESOLUTION = "1920x1080"
-# Tailscale: pega tu authkey de https://login.tailscale.com/admin/settings/keys
-# (o déjalo en "" si prefieres escanear el QR manualmente)
-TS_AUTHKEY = ""
-# ===================================================
+PORT = 8080
 
-repo_dir = "/content/Maquina-v7"
-if not os.path.isdir(repo_dir):
-    import tarfile, urllib.request
-    tar_url = "https://codeload.github.com/jephersonRD/Maquina-v7/tar.gz/refs/heads/main"
-    urllib.request.urlretrieve(tar_url, "/tmp/maquina-v7.tar.gz")
-    with tarfile.open("/tmp/maquina-v7.tar.gz") as t:
-        t.extractall("/content")
-    os.rename("/content/Maquina-v7-main", repo_dir)
-    os.remove("/tmp/maquina-v7.tar.gz")
-os.chdir(repo_dir + "/scripts")
+# Descargar proyecto
+if not os.path.isdir('/content/Maquina-v7'):
+    !curl -fsSL "https://codeload.github.com/jephersonRD/Maquina-v7/tar.gz/refs/heads/main" -o /tmp/maquina-v7.tar.gz
+    !tar xzf /tmp/maquina-v7.tar.gz -C /content
+    !mv /content/Maquina-v7-main /content/Maquina-v7
+    !rm -f /tmp/maquina-v7.tar.gz
 
-print("Ejecutando instalador XRDP + KDE Plasma...\n")
-r = subprocess.run(f"bash setup_xrdp.sh {USERNAME} {PASSWORD} {RESOLUTION}", shell=True)
-if r.returncode != 0:
-    print("\n❌❌ setup_xrdp.sh terminó con error."); raise SystemExit(r.returncode)
+# Instalar
+%cd /content/Maquina-v7/scripts
+!bash setup_openbox.sh {RESOLUTION}
+!bash setup_audio.sh
+!bash setup_selkies.sh
 
-# Tailscale (para conectarte desde tu móvil/PC de forma segura)
-ip = ""
-if TS_AUTHKEY:
-    print("\nConectando a Tailscale...")
-    subprocess.run(f'bash setup_tailscale.sh "{TS_AUTHKEY}"', shell=True)
-    ip = subprocess.run("tailscale ip -4 2>/dev/null | head -n1", shell=True, capture_output=True, text=True).stdout.strip()
-
-print("\n========================================")
-print("✅ MÁQUINA LISTA (KDE Plasma + XRDP)")
-print("   Usuario      :", USERNAME)
-print("   Contraseña   :", PASSWORD)
-if ip:
-    print("   🌐 IP Tailscale :", ip, "(conéctate por RDP a este IP:3389)")
-else:
-    print("   🌐 Tailscale    : esperando conexión...")
-print("========================================")
-print("\n📱 En tu móvil/PC:")
-print("   1. Abre Microsoft Remote Desktop (o aRDP en Android)")
-print("   2. Agrega PC: IP-de-Tailscale:3389")
-print("   3. Usuario:", USERNAME, "| Contraseña:", PASSWORD)
-print("========================================")
+# Iniciar
+!bash start_desktop.sh {RESOLUTION} {USERNAME} {PASSWORD} {PORT}
 ```
 
-### 📱 Conectarte desde tu dispositivo
+## 🖥️ Requisitos
 
-| Plataforma | App recomendada | Pasos |
-|---|---|---|
-| **Android** | **Microsoft Remote Desktop** (oficial, gratis) o **aRDP** | Agrega PC → IP de Tailscale → Puerto 3389 → Usuario/Contraseña |
-| **Windows** | **Conexión a Escritorio Remoto** (mstsc.exe) | Ejecuta `mstsc` → IP de Tailscale → Conectar |
-| **Linux** | **Remmina** o **xfreerdp** | `xfreerdp /v:IP_TAILSCALE:3389 /u:jeph /p:medina` |
+| Componente | Requisito |
+|------------|-----------|
+| **Plataforma** | Google Colab (gratuito o Pro) |
+| **GPU** | Opcional (mejora rendimiento con NVENC) |
+| **Navegador** | Chrome, Firefox, Edge, Safari (cualquier navegador moderno) |
+| **Internet** | Conexión estable |
 
-### ⚠️ No cierres la pestaña
-Colab mata la sesión si cierras la pestaña. Mantenla abierta (puedes minimizarla).
+## 🎮 GPU y Encoding
 
-## ✨ Características
+| GPU | Encoder | Descripción |
+|-----|---------|-------------|
+| NVIDIA Tesla T4 | NVENC H.264 | Hardware encoding (recomendado) |
+| Sin GPU | Software H.264 | CPU encoding (funcional) |
 
-- 🖥️ **Escritorio KDE Plasma** completo con **XRDP** (protocolo RDP nativo).
-- 📱 **Cualquier cliente RDP**: Microsoft Remote Desktop, aRDP, Remmina, xfreerdp.
-- 🔐 **Tailscale**: conexión TCP segura para RDP (sin abrir puertos).
-- 🔒 **Keep-alive**: evita el cierre por inactividad de Colab.
-- 📦 **100% open-source**: scripts propios, sin binarios cerrados.
-- 💻 **Sin GPU necesaria**: funciona perfectamente en CPU.
+La detección de GPU es automática. Si hay NVIDIA, se usa NVENC. Si no, se usa software.
 
-## 🏗️ Arquitectura
+## 🔊 Audio
+
+El audio del escritorio se captura via PulseAudio y se transmite al navegador mediante Selkies.
 
 ```
- Tu dispositivo (cualquier cliente RDP)  ←─ TCP (Tailscale) ──┐
-        │  RDP protocol (puerto 3389)                         │
-        │                                                     ▼
-   ┌─────────────────────────────────────────────────────────────┐
-   │  Google Colab (contenedor Linux)                             │
-   │   ├─ KDE Plasma desktop (XRDP)                               │
-   │   ├─ XRDP server (puerto 3389, protocolo RDP nativo)        │
-   │   └─ Tailscale (conexión segura TCP)                         │
-   └─────────────────────────────────────────────────────────────┘
+Aplicación Linux
+      ↓
+PulseAudio
+      ↓
+Monitor del sink
+      ↓
+Selkies (pcmflux)
+      ↓
+Opus encoding
+      ↓
+Browser
 ```
 
-## ⚙️ Diferencias con versiones anteriores
+## 📱 Acceso
 
-| Aspecto | Sunshine + Moonlight | XRDP + RDP |
-|---|---|---|
-| **Latencia** | ~10-15 ms (gaming) | ~30-100 ms (escritorio/productividad) |
-| **GPU / NVENC** | Requerido para streaming | No necesario |
-| **Cliente** | Moonlight app nativa | Cualquier cliente RDP |
-| **Audio** | UDP streaming | Redirigido por túnel RDP |
-| **Gamepad** | Nativo en Moonlight | No nativo (usa apps de mapeo) |
-| **PIN de emparejamiento** | Sí (Web UI) | No (solo usuario/contraseña) |
-| **cloudflared** | Necesario para Web UI | No necesario |
+| Plataforma | Cómo acceder |
+|------------|--------------|
+| **Cualquier dispositivo** | Abre `http://<URL>:8080` en el navegador |
+| **Android** | Chrome o cualquier navegador |
+| **iOS** | Safari o Chrome |
+| **Windows/Linux/Mac** | Chrome, Firefox, Edge |
+
+## ⚠️ Importante
+
+- **No cierres la pestaña de Colab** si deseas mantener la sesión activa.
+- **Selecciona GPU** en Runtime → Change runtime type para mejor rendimiento.
+- **La URL es local**: solo funciona en la misma máquina. Para acceso externo, usa Tailscale o similar.
 
 ## 🐛 Solución de problemas
 
 | Síntoma | Solución |
 |---------|----------|
-| No conecta por RDP | Verifica que el puerto 3389 escucha: `ss -ltn \| grep 3389` |
-| Tailscale no conecta | Confirma la authkey y **aprueba** `maquina-v7` en login.tailscale.com → Devices |
-| Escritorio no carga | Verifica la sesión: `cat /home/$USER/.xsession` debe decir `startplasma-x11` |
-| XRDP no arranca | Reinicia servicios: `service xrdp-sesman start; service xrdp start` |
-| Sin GPU funciona | XRDP no necesita GPU, funciona 100% en CPU |
+| No carga el escritorio | Verifica que Xvfb esté corriendo: `ps aux \| grep Xvfb` |
+| Sin audio | Ejecuta `pactl info` para verificar PulseAudio |
+| Selkies no inicia | Revisa logs: `cat /tmp/selkies.log` |
+| GPU no detectada | Verifica con `nvidia-smi` |
+| Pantalla negra | Reinicia el escritorio: `bash start_desktop.sh` |
+
+## 📂 Estructura del proyecto
+
+```
+Maquina-v7/
+├── Maquina-v7.ipynb          # Notebook principal para Colab
+├── README.md                  # Esta documentación
+├── LICENSE                    # Licencia MIT
+├── assets/                    # Logos e imágenes
+├── colab_snippet.py          # Snippet para copiar/pegar
+└── scripts/
+    ├── setup_openbox.sh       # Instala Openbox + dependencias
+    ├── setup_audio.sh         # Configura PulseAudio
+    ├── setup_selkies.sh       # Instala Selkies
+    ├── start_desktop.sh       # Inicia todos los servicios
+    ├── diagnostics.sh         # Diagnóstico del sistema
+    ├── install_steam.sh       # Instala Steam (opcional)
+    └── setup_tailscale.sh     # Instala Tailscale (opcional)
+```
 
 ## 📜 Licencia
 
