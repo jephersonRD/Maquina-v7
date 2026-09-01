@@ -4,7 +4,7 @@
 
 # Maquina-v7
 
-### ☁️ Cloud PC Linux + Openbox + Selkies en Google Colab
+### ☁️ Cloud PC Linux + LXQt + Apache Guacamole en Google Colab
 
 [![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/jephersonRD/Maquina-v7/blob/main/Maquina-v7.ipynb)
 [![GitHub Stars](https://img.shields.io/github/stars/jephersonRD/Maquina-v7?style=social)](https://github.com/jephersonRD/Maquina-v7/stargazers)
@@ -13,17 +13,17 @@
 [![Last Commit](https://img.shields.io/github/last-commit/jephersonRD/Maquina-v7)](https://github.com/jephersonRD/Maquina-v7/commits/main)
 
 ![Platform](https://img.shields.io/badge/platform-Google%20Colab-blue)
-![Desktop](https://img.shields.io/badge/desktop-Openbox-light)
-![Remote](https://img.shields.io/badge/remote-Selkies-green)
-![Protocol](https://img.shields.io/badge/protocol-WebRTC/WebSocket-blueviolet)
+![Desktop](https://img.shields.io/badge/desktop-LXQt-light)
+![Gateway](https://img.shields.io/badge/gateway-Apache%20Guacamole-green)
+![Backend](https://img.shields.io/badge/backend-VNC-blueviolet)
 
 </div>
 
 ---
 
-## 📖 Descripción
+## 📖 Descripcion
 
-**Maquina-v7** convierte una sesión de **Google Colab** en un **escritorio remoto GNU/Linux** accesible desde **cualquier navegador web** mediante **Selkies**.
+**Maquina-v7** convierte una sesion de **Google Colab** en un **escritorio remoto GNU/Linux** accesible desde **cualquier navegador web** mediante **Apache Guacamole**.
 
 ### Arquitectura
 
@@ -32,64 +32,66 @@ Google Colab
      ↓
    Linux
      ↓
-   Xvfb (display virtual)
+ Xvfb (display virtual)
      ↓
-  Openbox (window manager)
+   LXQt (escritorio)
      ↓
-   Selkies (remote desktop)
+ x11vnc (servidor VNC)
      ↓
-  Browser (acceso web)
+  guacd (proxy Guacamole)
+     ↓
+ Apache Guacamole (gateway web)
+     ↓
+   Browser (acceso web)
 ```
 
-### ¿Por qué Selkies en vez de XRDP/Sunshine?
+### Por que VNC + Guacamole?
 
-- **Sin cliente especializado**: accede desde cualquier navegador web.
-- **Baja latencia**: streaming WebRTC/WebSocket optimizado.
-- **GPU acceleration**: NVENC (NVIDIA) o fallback a software (CPU).
-- **Audio nativo**: captura de audio del sistema via PulseAudio.
-- **Simple**: sin configuración compleja de red o VPN.
-- **Acceso remoto**: incluye soporte Tailscale para acceder desde cualquier dispositivo en tu tailnet.
+- **Estabilidad**: VNC es maduro y predecible en contenedores Colab
+- **Sin cliente especializado**: accede desde cualquier navegador web
+- **X11 nativo**: x11vnc comparte el display Xvfb directamente
+- **Audio**: PulseAudio integrado con monitor de audio
+- **GPU**: compatible con NVIDIA T4 cuando Colab la proporciona
+- **Sencillo**: instalacion automatizada en 3 pasos
 
-## ▶️ Cómo usar
+## ▶️ Como usar
 
-### Opción 1: Notebook (recomendado)
+### Opcion 1: Notebook (recomendado)
 
-1. Abre el notebook en Colab usando el botón de arriba
+1. Abre el notebook en Colab usando el boton de arriba
 2. Selecciona **Runtime → Change runtime type → GPU**
 3. Ejecuta las celdas en orden:
-   - ⚙️ Configuración (activa Tailscale si quieres acceso remoto)
+   - ⚙️ Configuracion
    - 📦 Instalar
    - 🚀 Iniciar
-4. Abre la URL que aparece en el navegador
+4. Abre `http://localhost:8080` en tu navegador
+5. Ingresa con el usuario y password configurados
 
-### Opción 2: Snippet (copiar y pegar)
+### Opcion 2: Snippet (copiar y pegar)
 
-Pega este código en una celda de Google Colab:
+Pega este codigo en una celda de Google Colab:
 
 ```python
 import os
 
-# Configuración
-USERNAME = "user"
-PASSWORD = "password"
+USERNAME   = "user"
+PASSWORD   = "password"
 RESOLUTION = "1920x1080"
-PORT = 8080
+GUAC_PORT  = 8080
 
-# Descargar proyecto
 if not os.path.isdir('/content/Maquina-v7'):
     !curl -fsSL "https://codeload.github.com/jephersonRD/Maquina-v7/tar.gz/refs/heads/main" -o /tmp/maquina-v7.tar.gz
     !tar xzf /tmp/maquina-v7.tar.gz -C /content
     !mv /content/Maquina-v7-main /content/Maquina-v7
     !rm -f /tmp/maquina-v7.tar.gz
 
-# Instalar
-%cd /content/Maquina-v7/scripts
-!bash setup_openbox.sh {RESOLUTION}
-!bash setup_audio.sh
-!bash setup_selkies.sh
+os.chdir('/content/Maquina-v7/scripts')
 
-# Iniciar
-!bash start_desktop.sh {RESOLUTION} {USERNAME} {PASSWORD} {PORT}
+!bash setup_lxqt.sh {RESOLUTION}
+!bash setup_audio.sh
+!bash setup_vnc.sh
+!bash setup_guacamole.sh
+!bash start_desktop.sh {RESOLUTION} {USERNAME} {PASSWORD} {GUAC_PORT}
 ```
 
 ## 🖥️ Requisitos
@@ -97,84 +99,91 @@ if not os.path.isdir('/content/Maquina-v7'):
 | Componente | Requisito |
 |------------|-----------|
 | **Plataforma** | Google Colab (gratuito o Pro) |
-| **GPU** | Opcional (mejora rendimiento con NVENC) |
-| **Navegador** | Chrome, Firefox, Edge, Safari (cualquier navegador moderno) |
-| **Internet** | Conexión estable |
+| **GPU** | Opcional (mejora rendimiento) |
+| **Navegador** | Chrome, Firefox, Edge, Safari |
+| **Internet** | Conexion estable |
 
 ## 🎮 GPU y Encoding
 
-| GPU | Encoder | Descripción |
+| GPU | Encoder | Descripcion |
 |-----|---------|-------------|
-| NVIDIA Tesla T4 | NVENC H.264 | Hardware encoding (recomendado) |
-| Sin GPU | Software H.264 | CPU encoding (funcional) |
+| NVIDIA Tesla T4 | VNC encoder | Hardware acceleration (si disponible) |
+| Sin GPU | Software VNC | CPU encoding (funcional) |
 
-La detección de GPU es automática. Si hay NVIDIA, se usa NVENC. Si no, se usa software.
+La deteccion de GPU es automatica. El sistema funciona con o sin GPU.
 
 ## 🔊 Audio
 
-El audio del escritorio se captura via PulseAudio y se transmite al navegador mediante Selkies.
+El audio del escritorio se captura via PulseAudio y se transmite al navegador mediante Guacamole.
 
 ```
-Aplicación Linux
+Aplicacion Linux
       ↓
 PulseAudio
       ↓
 Monitor del sink
       ↓
-Selkies (pcmflux)
+x11vnc (audio capture)
       ↓
-Opus encoding
+Guacamole
       ↓
 Browser
 ```
 
+### Diagnostico de audio
+
+```bash
+pactl info                    # Verificar PulseAudio
+pactl list short sinks        # Ver sinks disponibles
+pactl list short sources      # Ver sources (monitores)
+paplay /usr/share/sounds/...  # Probar audio
+```
+
 ## 📱 Acceso
 
-| Plataforma | Cómo acceder |
+| Plataforma | Como acceder |
 |------------|--------------|
-| **Con Tailscale** | Abre `http://<tailscale-ip>:8080` desde cualquier dispositivo en la misma tailnet |
-| **Sin Tailscale** | Solo funciona localmente en Colab: `http://localhost:8080` |
+| **Cualquier dispositivo** | Abre `http://localhost:8080` en el navegador |
+| **Android** | Chrome o cualquier navegador |
+| **iOS** | Safari o Chrome |
+| **Windows/Linux/Mac** | Chrome, Firefox, Edge |
 
-### Acceso desde Android/iOS con Tailscale
-
-1. Activa `USE_TAILSCALE = True` en la celda de Configuración
-2. Instala Tailscale en tu Android/iOS
-3. Conecta a la misma tailnet (usa la misma cuenta)
-4. Abre `http://<tailscale-ip>:8080` en Chrome/Safari
+**Credenciales por defecto:** usuario `user`, password `password` (configurables en la celda de Configuracion).
 
 ## ⚠️ Importante
 
-- **No cierres la pestaña de Colab** si deseas mantener la sesión activa.
+- **No cierres la pestana de Colab** si deseas mantener la sesion activa.
 - **Selecciona GPU** en Runtime → Change runtime type para mejor rendimiento.
-- **La URL es local**: solo funciona en la misma máquina. Activa Tailscale para acceso externo desde Android/u otros dispositivos.
+- **Compilacion de guacd**: la instalacion de Guacamole puede tardar 5-10 minutos la primera vez.
 
-## 🐛 Solución de problemas
+## 🐛 Solucion de problemas
 
-| Síntoma | Solución |
+| Sintoma | Solucion |
 |---------|----------|
-| No carga el escritorio | Verifica que Xvfb esté corriendo: `ps aux \| grep Xvfb` |
+| No carga el escritorio | Verifica que Xvfb este corriendo: `ps aux \| grep Xvfb` |
 | Sin audio | Ejecuta `pactl info` para verificar PulseAudio |
-| Selkies no inicia | Revisa logs: `cat /tmp/selkies.log` |
+| Guacamole no inicia | Revisa logs: `cat /tmp/guacd.log`, `cat /tmp/tomcat*.log` |
 | GPU no detectada | Verifica con `nvidia-smi` |
 | Pantalla negra | Reinicia el escritorio: `bash start_desktop.sh` |
+| Tomcat no inicia | Verifica: `cat /var/lib/tomcat9/logs/catalina.out` |
 
 ## 📂 Estructura del proyecto
 
 ```
 Maquina-v7/
 ├── Maquina-v7.ipynb          # Notebook principal para Colab
-├── README.md                  # Esta documentación
+├── README.md                  # Esta documentacion
 ├── LICENSE                    # Licencia MIT
-├── assets/                    # Logos e imágenes
+├── assets/                    # Logos e imagenes
 ├── colab_snippet.py          # Snippet para copiar/pegar
 └── scripts/
-    ├── setup_openbox.sh       # Instala Openbox + dependencias
-    ├── setup_audio.sh         # Configura PulseAudio
-    ├── setup_selkies.sh       # Instala Selkies
-    ├── start_desktop.sh       # Inicia todos los servicios
-    ├── diagnostics.sh         # Diagnóstico del sistema
-    ├── install_steam.sh       # Instala Steam (opcional)
-    └── setup_tailscale.sh     # Instala Tailscale (opcional)
+    ├── setup_lxqt.sh         # Instala LXQt + dependencias
+    ├── setup_audio.sh        # Configura PulseAudio
+    ├── setup_vnc.sh          # Instala x11vnc
+    ├── setup_guacamole.sh    # Instala Apache Guacamole
+    ├── start_desktop.sh      # Inicia todos los servicios
+    ├── diagnostics.sh        # Diagnostico del sistema
+    └── install_steam.sh      # Instala Steam (opcional)
 ```
 
 ## 📜 Licencia

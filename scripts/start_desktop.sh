@@ -1,12 +1,13 @@
 #!/usr/bin/env bash
-# start_desktop.sh - Inicia Xvfb + Openbox + PulseAudio + Selkies
-# Uso: bash start_desktop.sh <RESOLUCION> <USUARIO> <CONTRASEÑA>
+# start_desktop.sh - Inicia Xvfb + LXQt + x11vnc + Guacamole
+# Uso: bash start_desktop.sh <RESOLUCION> <USUARIO> <CONTRASEÑA> <PUERTO>
 set -uo pipefail
 
 RESOLUTION="${1:-1920x1080}"
 USERNAME="${2:-user}"
 PASSWORD="${3:-password}"
-PORT="${4:-8080}"
+GUAC_PORT="${4:-8080}"
+VNC_PORT="5900"
 
 WIDTH="${RESOLUTION%x*}"
 HEIGHT="${RESOLUTION#*x}"
@@ -16,10 +17,9 @@ export XDG_RUNTIME_DIR="${XDG_RUNTIME_DIR:-/tmp/runtime-$(id -u)}"
 export PULSE_RUNTIME_PATH="${XDG_RUNTIME_DIR}/pulse"
 export PULSE_SERVER="unix:${PULSE_RUNTIME_PATH}/native"
 export XDG_SESSION_TYPE=x11
-export XDG_CURRENT_DESKTOP=Openbox
-export DESKTOP_SESSION=openbox
+export XDG_CURRENT_DESKTOP=LXQt
+export DESKTOP_SESSION=lxqt
 
-# Crear directorios
 mkdir -p "$XDG_RUNTIME_DIR" "$PULSE_RUNTIME_PATH"
 chmod 700 "$XDG_RUNTIME_DIR"
 
@@ -27,9 +27,10 @@ echo "━━━━━━━━━━━━━━━━━━━━━━━━�
 echo "  🚀 MAQUINA-V7 — Iniciando escritorio"
 echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
 echo ""
-echo "  🖥️  Desktop      : Openbox"
-echo "  🌐 Remote       : Selkies"
-echo "  📺 Resolución   : ${WIDTH}x${HEIGHT}"
+echo "  🖥️  Desktop      : LXQt"
+echo "  🌐 Gateway      : Apache Guacamole"
+echo "  🔗 Backend      : VNC (x11vnc)"
+echo "  📺 Resolucion   : ${WIDTH}x${HEIGHT}"
 echo ""
 
 # Detectar GPU
@@ -39,10 +40,8 @@ if command -v nvidia-smi >/dev/null 2>&1 && nvidia-smi >/dev/null 2>&1; then
   HAS_NVIDIA=true
   GPU_NAME=$(nvidia-smi --query-gpu=name --format=csv,noheader,nounits 2>/dev/null | head -n1)
   echo "  🎮 GPU          : NVIDIA ${GPU_NAME}"
-  echo "  ⚡ Encoder      : NVENC H.264"
 else
-  echo "  🎮 GPU          : CPU fallback"
-  echo "  ⚡ Encoder      : Software H.264"
+  echo "  🎮 GPU          : No detectada (CPU)"
 fi
 echo ""
 
@@ -50,12 +49,14 @@ echo ""
 echo "   ↳ Deteniendo procesos previos..."
 pkill -x Xvfb 2>/dev/null || true
 pkill -x pulseaudio 2>/dev/null || true
-pkill -f "selkies" 2>/dev/null || true
+pkill -x x11vnc 2>/dev/null || true
 pkill -x openbox 2>/dev/null || true
+pkill -x guacd 2>/dev/null || true
+pkill -f "tomcat" 2>/dev/null || true
 sleep 1
 
-# 1. Iniciar Xvfb (servidor X virtual)
-echo "   ↳ [1/4] Iniciando Xvfb (display ${DISPLAY})..."
+# [1/6] Xvfb
+echo "   ↳ [1/6] Iniciando Xvfb (display ${DISPLAY})..."
 Xvfb "${DISPLAY}" -screen 0 ${WIDTH}x${HEIGHT}x24 \
   -s 0 -dpms \
   +extension "COMPOSITE" +extension "DAMAGE" +extension "GLX" \
@@ -64,8 +65,6 @@ Xvfb "${DISPLAY}" -screen 0 ${WIDTH}x${HEIGHT}x24 \
   -nolisten "tcp" -ac -noreset -shmem \
   >/tmp/xvfb.log 2>&1 &
 
-# Esperar a que Xvfb esté listo
-echo "      Esperando Xvfb..."
 for i in {1..15}; do
   if [ -S "/tmp/.X11-unix/X${DISPLAY#*:}" ]; then
     echo "      ✅ Xvfb listo"
@@ -80,8 +79,8 @@ if [ ! -S "/tmp/.X11-unix/X${DISPLAY#*:}" ]; then
   exit 1
 fi
 
-# 2. Iniciar PulseAudio
-echo "   ↳ [2/4] Iniciando PulseAudio..."
+# [2/6] PulseAudio
+echo "   ↳ [2/6] Iniciando PulseAudio..."
 pulseaudio --kill 2>/dev/null || true
 sleep 1
 
@@ -91,7 +90,6 @@ pulseaudio --daemonize=no \
   --disallow-exit \
   --disallow-module-loading=0 &
 
-# Esperar a que PulseAudio esté listo
 for i in {1..10}; do
   if pactl info >/dev/null 2>&1; then
     echo "      ✅ PulseAudio listo"
@@ -100,85 +98,119 @@ for i in {1..10}; do
   sleep 1
 done
 
-# Verificar monitor de PulseAudio para Selkies
 AUDIO_MONITOR=""
 if pactl info >/dev/null 2>&1; then
-  # Buscar monitor del sink
   AUDIO_MONITOR=$(pactl list short sources 2>/dev/null | grep "monitor" | awk '{print $2}' | head -n1)
   if [ -n "$AUDIO_MONITOR" ]; then
     echo "      🔊 Audio Monitor: ${AUDIO_MONITOR}"
-  else
-    echo "      ⚠️ No se encontró monitor de audio"
   fi
 fi
 
-# 3. Iniciar Openbox
-echo "   ↳ [3/4] Iniciando Openbox..."
-openbox &
-sleep 2
-echo "      ✅ Openbox listo"
+# [3/6] LXQt
+echo "   ↳ [3/6] Iniciando LXQt..."
+export DBUS_SESSION_BUS_ADDRESS="unix:path=${XDG_RUNTIME_DIR}/bus"
+mkdir -p "$XDG_RUNTIME_DIR"
+eval $(dbus-launch --sh-syntax)
+export DBUS_SESSION_BUS_ADDRESS
 
-# 4. Iniciar Selkies
-echo "   ↳ [4/4] Iniciando Selkies..."
+lxqt-session &
+LXQT_PID=$!
+sleep 3
+echo "      ✅ LXQt listo (PID: ${LXQT_PID})"
 
-# Configurar variables para Selkies
-export DISPLAY="${DISPLAY}"
-export PULSE_SERVER="${PULSE_SERVER}"
+# [4/6] x11vnc
+echo "   ↳ [4/6] Iniciando x11vnc..."
+echo "${PASSWORD}" | x11vnc -storepasswd - /tmp/vnc_password 2>/dev/null
 
-# Detectar comando de Selkies
-SELKIES_CMD=""
-for cmd in selkies-gstreamer selkies; do
-  if command -v "$cmd" >/dev/null 2>&1; then
-    SELKIES_CMD="$cmd"
+x11vnc -display "${DISPLAY}" -forever -shared \
+  -rfbport ${VNC_PORT} \
+  -rfbauth /tmp/vnc_password \
+  -noxdamage \
+  >/tmp/x11vnc.log 2>&1 &
+VNC_PID=$!
+
+for i in {1..10}; do
+  if ss -ltn 2>/dev/null | grep -q ":${VNC_PORT}"; then
+    echo "      ✅ x11vnc listo (PID: ${VNC_PID})"
     break
   fi
+  sleep 1
 done
 
-if [ -z "$SELKIES_CMD" ]; then
-  echo "      ❌ Selkies no encontrado"
-  echo "      Instalando Selkies..."
-  bash "$(dirname "$0")/setup_selkies.sh" || { echo "❌ Fallo al instalar Selkies"; exit 1; }
-  # Re-detectar después de instalar
-  for cmd in selkies-gstreamer selkies; do
-    if command -v "$cmd" >/dev/null 2>&1; then
-      SELKIES_CMD="$cmd"
-      break
-    fi
-  done
-  if [ -z "$SELKIES_CMD" ]; then
-    echo "      ❌ Selkies no disponible"
-    exit 1
+# [5/6] guacd
+echo "   ↳ [5/6] Iniciando guacd..."
+guacd -f -b 127.0.0.1 -l 4822 >/tmp/guacd.log 2>&1 &
+GUACD_PID=$!
+
+for i in {1..10}; do
+  if ss -ltn 2>/dev/null | grep -q ":4822"; then
+    echo "      ✅ guacd listo (PID: ${GUACD_PID})"
+    break
   fi
-fi
-echo "      📦 Selkies: $SELKIES_CMD"
+  sleep 1
+done
 
-# Construir comando de Selkies
-SELKIES_ARGS="--addr=0.0.0.0 --port=${PORT}"
-SELKIES_ARGS="${SELKIES_ARGS} --enable-https=false"
-SELKIES_ARGS="${SELKIES_ARGS} --basic-auth-user=${USERNAME}"
-SELKIES_ARGS="${SELKIES_ARGS} --basic-auth-password=${PASSWORD}"
-SELKIES_ARGS="${SELKIES_ARGS} --encoder=h264enc"
-SELKIES_ARGS="${SELKIES_ARGS} --enable-resize=true"
+# [6/6] Apache Guacamole (Tomcat)
+echo "   ↳ [6/6] Iniciando Apache Guacamole..."
 
-# Si hay monitor de audio, configurarlo
-if [ -n "$AUDIO_MONITOR" ]; then
-  export SELKIES_AUDIO_DEVICE="${AUDIO_MONITOR}"
-fi
+# Generar configuracion de usuarios
+SALT=$(openssl rand -hex 16)
+HASH=$(echo -n "${SALT}${PASSWORD}" | sha256sum | awk '{print $1}')
 
-# Forzar CPU si no hay NVIDIA
-if [ "$HAS_NVIDIA" = false ]; then
-  SELKIES_ARGS="${SELKIES_ARGS} --use-cpu=true"
-fi
+cat > /etc/guacamole/users.json << GUCEOF
+{
+  "users": {
+    "${USERNAME}": {
+      "password": "\$sha256\$${SALT}\$${HASH}",
+      "connections": {
+        "Desktop": {
+          "protocol": "vnc",
+          "parameters": {
+            "hostname": "127.0.0.1",
+            "port": "${VNC_PORT}",
+            "password": "${PASSWORD}",
+            "ignore-cert-errors": "true",
+            "resize-method": "display-update"
+          }
+        }
+      }
+    }
+  }
+}
+GUCEOF
 
-# Iniciar Selkies
-env -u LD_PRELOAD ${SELKIES_CMD} ${SELKIES_ARGS} > /tmp/selkies.log 2>&1 &
-SELKIES_PID=$!
+# Configurar guacamole.properties
+cat > /etc/guacamole/guacamole.properties << PROPEOF
+auth-provider: net.sourceforge.guacamole.net.auth.json.JSONAuthenticationProvider
+json-secret-key: maquina-v7-guac-key
+json-users: /etc/guacamole/users.json
+guacd-hostname: 127.0.0.1
+guacd-port: 4822
+log-level: info
+PROPEOF
 
-# Esperar a que Selkies esté listo
-echo "      Esperando Selkies..."
-for i in {1..15}; do
-  if curl -s "http://localhost:${PORT}" >/dev/null 2>&1; then
-    echo "      ✅ Selkies listo (PID: ${SELKIES_PID})"
+# Enlazar configuracion para Tomcat
+ln -sf /etc/guacamole /var/lib/tomcat9/.guacamole 2>/dev/null || true
+ln -sf /etc/guacamole /root/.guacamole 2>/dev/null || true
+
+# Crear setenv.sh para Tomcat
+CATALINA_HOME=/usr/share/tomcat9
+CATALINA_BASE=/var/lib/tomcat9
+mkdir -p "${CATALINA_HOME}/bin"
+cat > "${CATALINA_HOME}/bin/setenv.sh" << 'SETEOF'
+export GUACAMOLE_HOME=/etc/guacamole
+SETEOF
+chmod +x "${CATALINA_HOME}/bin/setenv.sh"
+
+# Iniciar Tomcat
+export GUACAMOLE_HOME=/etc/guacamole
+${CATALINA_HOME}/bin/catalina.sh start 2>/dev/null || \
+  ${CATALINA_HOME}/bin/catalina.sh run &>/dev/null &
+
+echo "      Esperando Guacamole..."
+for i in {1..30}; do
+  if curl -s "http://localhost:${GUAC_PORT}" >/dev/null 2>&1; then
+    echo "      ✅ Guacamole listo"
     break
   fi
   sleep 1
@@ -190,41 +222,39 @@ echo "━━━━━━━━━━━━━━━━━━━━━━━━�
 echo "  ✅ Escritorio iniciado correctamente"
 echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
 echo ""
-
-# Mostrar URL de acceso
-SELKIES_URL="http://localhost:${PORT}"
-echo "  🌐 DESKTOP:"
-echo "     ${SELKIES_URL}"
+echo "  🌐 GUACAMOLE:"
+echo "     http://localhost:${GUAC_PORT}"
 echo ""
-
-# Verificar servicios
 echo "  📊 Estado:"
 if [ -S "/tmp/.X11-unix/X${DISPLAY#*:}" ]; then
-  echo "     ✅ Xvfb: ejecutándose"
+  echo "     ✅ Xvfb: ejecutandose"
 else
   echo "     ❌ Xvfb: no responde"
 fi
-
 if pactl info >/dev/null 2>&1; then
-  echo "     ✅ PulseAudio: ejecutándose"
-  if [ -n "$AUDIO_MONITOR" ]; then
-    echo "     ✅ Audio Monitor: ${AUDIO_MONITOR}"
-  fi
+  echo "     ✅ PulseAudio: ejecutandose"
 else
-  echo "     ⚠️ PulseAudio: no responde"
+  echo "     ⚠️  PulseAudio: no responde"
 fi
-
-if pgrep -x openbox >/dev/null 2>&1; then
-  echo "     ✅ Openbox: ejecutándose"
+if pgrep -f "lxqt-session" >/dev/null 2>&1; then
+  echo "     ✅ LXQt: ejecutandose"
 else
-  echo "     ❌ Openbox: no responde"
+  echo "     ❌ LXQt: no responde"
 fi
-
-if pgrep -f "selkies" >/dev/null 2>&1; then
-  echo "     ✅ Selkies: ejecutándose"
+if pgrep -x x11vnc >/dev/null 2>&1; then
+  echo "     ✅ x11vnc: ejecutandose"
 else
-  echo "     ❌ Selkies: no responde"
+  echo "     ❌ x11vnc: no responde"
 fi
-
+if pgrep -x guacd >/dev/null 2>&1; then
+  echo "     ✅ guacd: ejecutandose"
+else
+  echo "     ❌ guacd: no responde"
+fi
+if curl -s "http://localhost:${GUAC_PORT}" >/dev/null 2>&1; then
+  echo "     ✅ Guacamole: ejecutandose"
+else
+  echo "     ⚠️  Guacamole: no responde"
+fi
 echo ""
 echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"

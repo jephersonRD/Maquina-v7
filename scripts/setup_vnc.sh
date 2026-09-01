@@ -1,21 +1,17 @@
 #!/usr/bin/env bash
-# setup_audio.sh - Instala PulseAudio para audio del escritorio
-# Uso: bash setup_audio.sh
+# setup_vnc.sh - Instala x11vnc para acceso VNC remoto
+# Uso: bash setup_vnc.sh
 set -uo pipefail
 
 echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-echo "  🔊 Configurando audio (PulseAudio)"
+echo "  🔗 Instalando x11vnc"
 echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
 
-echo "   ↳ Instalando PulseAudio..."
-apt-get install -y --no-install-recommends pulseaudio pulseaudio-utils \
-  || { echo "❌ fallo al instalar PulseAudio"; exit 1; }
+apt-get install -y --no-install-recommends x11vnc \
+  || { echo "❌ fallo al instalar x11vnc"; exit 1; }
 
-export XDG_RUNTIME_DIR="${XDG_RUNTIME_DIR:-/tmp/runtime-$(id -u)}"
-mkdir -p "$XDG_RUNTIME_DIR"
-chmod 700 "$XDG_RUNTIME_DIR"
-
+echo "   ✅ x11vnc instalado: $(which x11vnc)"
 echo ""
 echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-echo "  ✅ PulseAudio instalado"
+echo "  ✅ VNC configurado"
 echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
