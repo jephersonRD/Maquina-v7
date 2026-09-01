@@ -216,13 +216,41 @@ for i in {1..30}; do
   sleep 1
 done
 
+# [7/7] Cloudflared tunnel (URL publica)
+echo "   ↳ [7/7] Creando tunnel publico..."
+PUBLIC_URL=""
+if ! command -v cloudflared >/dev/null 2>&1; then
+  curl -fsSL https://github.com/cloudflare/cloudflared/releases/latest/download/cloudflared-linux-amd64 -o /usr/local/bin/cloudflared 2>/dev/null
+  chmod +x /usr/local/bin/cloudflared
+fi
+
+if command -v cloudflared >/dev/null 2>&1; then
+  cloudflared tunnel --url "http://localhost:${GUAC_PORT}" >/tmp/cloudflared.log 2>&1 &
+  CFPID=$!
+  for i in {1..30}; do
+    PUBLIC_URL=$(grep -oE 'https://[a-zA-Z0-9._-]+\.trycloudflare\.com' /tmp/cloudflared.log 2>/dev/null | head -n1)
+    if [ -n "$PUBLIC_URL" ]; then
+      echo "      ✅ Tunnel listo"
+      break
+    fi
+    sleep 1
+  done
+else
+  echo "      ⚠️  cloudflared no se pudo instalar"
+fi
+
 # Verificar estado final
 echo ""
 echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
 echo "  ✅ Escritorio iniciado correctamente"
 echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
 echo ""
-echo "  🌐 GUACAMOLE:"
+if [ -n "$PUBLIC_URL" ]; then
+  echo "  🌐 URL PUBLICA (abre desde cualquier dispositivo):"
+  echo "     ${PUBLIC_URL}"
+  echo ""
+fi
+echo "  🌐 GUACAMOLE (local):"
 echo "     http://localhost:${GUAC_PORT}"
 echo ""
 echo "  📊 Estado:"

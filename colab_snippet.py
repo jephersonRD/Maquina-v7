@@ -47,11 +47,27 @@ if r.returncode != 0:
     print("Error al iniciar escritorio")
     raise SystemExit(r.returncode)
 
+# Detectar URL publica
+import re
+public_url = ""
+try:
+    with open("/tmp/cloudflared.log") as f:
+        for line in f:
+            m = re.search(r'https://[a-zA-Z0-9._-]+\.trycloudflare\.com', line)
+            if m:
+                public_url = m.group(0)
+                break
+except FileNotFoundError:
+    pass
+
 print("\n" + "=" * 50)
 print("MAQUINA LISTA (LXQt + Apache Guacamole)")
 print("=" * 50)
 print(f"   Usuario    : {USERNAME}")
 print(f"   Resolucion : {RESOLUTION}")
 print(f"   Puerto     : {GUAC_PORT}")
-print(f"\nAbre en tu navegador: http://localhost:{GUAC_PORT}")
+if public_url:
+    print(f"\nURL PUBLICA (desde cualquier dispositivo):")
+    print(f"   {public_url}")
+print(f"\nURL local (solo Colab): http://localhost:{GUAC_PORT}")
 print("=" * 50)
