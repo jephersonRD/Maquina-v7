@@ -18,6 +18,7 @@ AUTHKEY=""
 TS_HOSTNAME=""
 WITH_TAILSCALE=1
 GRANT_SUDO=0
+HAS_SYSTEMD=0
 
 C_RESET=$'\033[0m'
 C_BLUE=$'\033[1;34m'
@@ -29,6 +30,52 @@ log()  { printf '%s==>%s %s\n' "$C_BLUE"   "$C_RESET" "$*"; }
 ok()   { printf '%s  ok%s %s\n' "$C_GREEN"  "$C_RESET" "$*"; }
 warn() { printf '%s  !!%s %s\n' "$C_YELLOW" "$C_RESET" "$*"; }
 die()  { printf '%sERROR%s %s\n' "$C_RED"   "$C_RESET" "$*" >&2; exit 1; }
+
+# ------------------------------------------------------- gestion de servicios
+# En una VM normal manda systemd. En un contenedor (Docker, WSL, Jupyter...)
+# no hay systemd como PID 1, asi que se cae a los scripts de init y, si tampoco
+# hay, se lanzan los demonios a mano. Nada de esto debe abortar el script.
+
+svc_enable() {
+  [ "$HAS_SYSTEMD" -eq 1 ] || return 0
+  systemctl enable "$1" >/dev/null 2>&1 || true
+}
+
+svc_restart() {
+  local unit="$1"
+  if [ "$HAS_SYSTEMD" -eq 1 ]; then
+    systemctl restart "$unit" >/dev/null 2>&1 && return 0
+    systemctl start "$unit"   >/dev/null 2>&1 && return 0
+    return 1
+  fi
+  if [ -x "/etc/init.d/${unit}" ]; then
+    service "$unit" restart >/dev/null 2>&1 && return 0
+    service "$unit" start   >/dev/null 2>&1 && return 0
+  fi
+  return 1
+}
+
+xrdp_direct_start() {
+  command -v xrdp >/dev/null 2>&1 || return 1
+  pgrep -x xrdp >/dev/null 2>&1 && return 0
+  if [ -x /usr/sbin/xrdp-sesman ] && ! pgrep -x xrdp-sesman >/dev/null 2>&1; then
+    nohup /usr/sbin/xrdp-sesman >/dev/null 2>&1 &
+    sleep 1
+  fi
+  [ -x /usr/sbin/xrdp ] && nohup /usr/sbin/xrdp >/dev/null 2>&1 &
+  sleep 1
+  pgrep -x xrdp >/dev/null 2>&1
+}
+
+tailscaled_direct_start() {
+  command -v tailscaled >/dev/null 2>&1 || return 1
+  pgrep -x tailscaled >/dev/null 2>&1 && return 0
+  install -d -m 0755 /var/lib/tailscale /run/tailscale
+  nohup tailscaled --state=/var/lib/tailscale/tailscaled.state \
+    --socket=/run/tailscale/tailscaled.sock >/var/log/tailscaled.log 2>&1 &
+  sleep 2
+  pgrep -x tailscaled >/dev/null 2>&1
+}
 
 usage() {
   cat <<EOF
@@ -87,6 +134,13 @@ case "${ID:-}" in
   ubuntu|debian) ok "detectado ${PRETTY_NAME:-$ID}" ;;
   *) die "solo Ubuntu 22.04/24.04 o Debian 12; detectado ${PRETTY_NAME:-desconocido}" ;;
 esac
+
+if [ -d /run/systemd/system ]; then
+  HAS_SYSTEMD=1
+else
+  HAS_SYSTEMD=0
+  warn "systemd no esta corriendo como PID 1 (contenedor): los servicios se arrancaran a mano"
+fi
 
 export DEBIAN_FRONTEND=noninteractive
 
@@ -172,9 +226,14 @@ ResultInactive=no
 ResultActive=yes
 PKLA
 
-systemctl enable xrdp >/dev/null 2>&1 || true
-systemctl restart xrdp
-ok "servicio xrdp activo en el puerto ${XRDP_PORT}"
+svc_enable xrdp
+if svc_restart xrdp; then
+  ok "servicio xrdp activo en el puerto ${XRDP_PORT}"
+elif xrdp_direct_start; then
+  warn "xrdp lanzado a mano (sin gestor de servicios): no sobrevive a un reinicio"
+else
+  warn "xrdp no arranco; revisa /var/log/xrdp.log y /var/log/xrdp-sesman.log"
+fi
 
 # -------------------------------------------------------------------- usuario
 if [ -n "$NEW_USER" ]; then
@@ -214,15 +273,22 @@ if [ "$WITH_TAILSCALE" -eq 1 ]; then
   if ! command -v tailscale >/dev/null 2>&1; then
     curl -fsSL https://tailscale.com/install.sh | sh
   fi
-  systemctl enable --now tailscaled >/dev/null 2>&1 || true
+  svc_enable tailscaled
+  if ! svc_restart tailscaled; then
+    tailscaled_direct_start || warn "tailscaled no arranco; revisa /var/log/tailscaled.log"
+  fi
 
   TS_ARGS=(--accept-routes --ssh)
   [ -n "$TS_HOSTNAME" ] && TS_ARGS+=(--hostname "$TS_HOSTNAME")
 
   if [ -n "$AUTHKEY" ]; then
     log "conectando la maquina a tu tailnet"
-    tailscale up --authkey "$AUTHKEY" "${TS_ARGS[@]}"
-    ok "Tailscale autenticado"
+    if tailscale up --authkey "$AUTHKEY" "${TS_ARGS[@]}"; then
+      ok "Tailscale autenticado"
+    else
+      warn "Tailscale no pudo conectarse; el error de arriba suele indicar /dev/net/tun ausente"
+      warn "comprueba con: sudo tailscale up --authkey ... (y lee el mensaje completo)"
+    fi
   else
     warn "sin --authkey: ejecuta 'sudo tailscale up --ssh' y autoriza en el navegador"
   fi
@@ -239,6 +305,12 @@ if command -v ufw >/dev/null 2>&1 && ufw status 2>/dev/null | grep -q "Status: a
 fi
 
 # -------------------------------------------------------------------- resumen
+if ! pgrep -x xrdp >/dev/null 2>&1; then
+  warn "xrdp no esta escuchando: esta maquina no aceptara conexiones RDP"
+fi
+if [ "$HAS_SYSTEMD" -eq 0 ]; then
+  warn "sin systemd los servicios no vuelven solos tras reiniciar; usa una VM con systemd"
+fi
 if [ -z "$TAILSCALE_IP" ]; then
   TAILSCALE_IP="$(hostname -I 2>/dev/null | awk '{print $1}')"
 fi

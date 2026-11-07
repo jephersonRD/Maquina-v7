@@ -2,10 +2,12 @@
 #
 # Maquina Virtual v7 - arranque y estado
 # Levanta xrdp y Tailscale si estan parados y muestra como conectarte.
+# Funciona con systemd y tambien en contenedores donde no lo hay.
 #
 set -Eeuo pipefail
 
 XRDP_PORT="3389"
+HAS_SYSTEMD=0
 
 C_RESET=$'\033[0m'
 C_BLUE=$'\033[1;34m'
@@ -18,8 +20,51 @@ ok()   { printf '%s  ok%s %s\n' "$C_GREEN"  "$C_RESET" "$*"; }
 warn() { printf '%s  !!%s %s\n' "$C_YELLOW" "$C_RESET" "$*"; }
 die()  { printf '%sERROR%s %s\n' "$C_RED"   "$C_RESET" "$*" >&2; exit 1; }
 
+# Misma logica que instalar.sh: systemd -> init.d -> demonio a mano
+svc_restart() {
+  local unit="$1"
+  if [ "$HAS_SYSTEMD" -eq 1 ]; then
+    systemctl restart "$unit" >/dev/null 2>&1 && return 0
+    systemctl start "$unit"   >/dev/null 2>&1 && return 0
+    return 1
+  fi
+  if [ -x "/etc/init.d/${unit}" ]; then
+    service "$unit" restart >/dev/null 2>&1 && return 0
+    service "$unit" start   >/dev/null 2>&1 && return 0
+  fi
+  return 1
+}
+
+xrdp_direct_start() {
+  command -v xrdp >/dev/null 2>&1 || return 1
+  pgrep -x xrdp >/dev/null 2>&1 && return 0
+  if [ -x /usr/sbin/xrdp-sesman ] && ! pgrep -x xrdp-sesman >/dev/null 2>&1; then
+    nohup /usr/sbin/xrdp-sesman >/dev/null 2>&1 &
+    sleep 1
+  fi
+  [ -x /usr/sbin/xrdp ] && nohup /usr/sbin/xrdp >/dev/null 2>&1 &
+  sleep 1
+  pgrep -x xrdp >/dev/null 2>&1
+}
+
+tailscaled_direct_start() {
+  command -v tailscaled >/dev/null 2>&1 || return 1
+  pgrep -x tailscaled >/dev/null 2>&1 && return 0
+  install -d -m 0755 /var/lib/tailscale /run/tailscale
+  nohup tailscaled --state=/var/lib/tailscale/tailscaled.state \
+    --socket=/run/tailscale/tailscaled.sock >/var/log/tailscaled.log 2>&1 &
+  sleep 2
+  pgrep -x tailscaled >/dev/null 2>&1
+}
+
 if [ "${EUID}" -ne 0 ]; then
   exec sudo -E bash "$0" "$@"
+fi
+
+if [ -d /run/systemd/system ]; then
+  HAS_SYSTEMD=1
+else
+  warn "systemd no esta corriendo como PID 1 (contenedor): se arranca a mano"
 fi
 
 command -v xrdp >/dev/null 2>&1 || die "xrdp no esta instalado, ejecuta primero: sudo bash instalar.sh"
@@ -31,24 +76,32 @@ if [ -f /etc/xrdp/xrdp.ini ]; then
 fi
 
 log "levantando xrdp"
-systemctl enable xrdp >/dev/null 2>&1 || true
-systemctl restart xrdp
-if systemctl is-active --quiet xrdp; then
+if svc_restart xrdp; then
+  ok "xrdp activo por el gestor de servicios"
+elif xrdp_direct_start; then
+  warn "xrdp lanzado a mano (sin gestor de servicios): no sobrevive a un reinicio"
+else
+  warn "xrdp no arranco; revisa /var/log/xrdp.log"
+fi
+
+if pgrep -x xrdp >/dev/null 2>&1; then
   ok "xrdp escuchando en el puerto ${XRDP_PORT}"
 else
-  warn "xrdp no arranco; revisa: journalctl -u xrdp -n 50 --no-pager"
+  warn "el proceso de xrdp no aparece; revisa /var/log/xrdp.log y /var/log/xrdp-sesman.log"
 fi
 
 TAILSCALE_IP=""
 if command -v tailscale >/dev/null 2>&1; then
   log "levantando Tailscale"
-  systemctl enable --now tailscaled >/dev/null 2>&1 || true
+  if ! svc_restart tailscaled; then
+    tailscaled_direct_start >/dev/null 2>&1 || warn "tailscaled no arranco"
+  fi
 
   if tailscale status >/dev/null 2>&1; then
     TAILSCALE_IP="$(tailscale ip -4 2>/dev/null | head -n1 || true)"
     ok "Tailscale conectado"
   else
-    warn "Tailscale sin autenticar: sudo tailscale up --ssh"
+    warn "Tailscale sin autenticar: sudo tailscale up --authkey tskey-auth-... --ssh"
   fi
 fi
 

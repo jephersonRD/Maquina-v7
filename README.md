@@ -161,6 +161,7 @@ sudo bash arrancar.sh
 
 | Síntoma | Causa y solución |
 |---|---|
+| `System has not been booted with systemd` | Estás en un contenedor (Colab, Docker, WSL), no en una VM arrancada. El script ya no aborta: cae a `service` o lanza el demonio a mano, pero ahí el escritorio no es fiable. Usa una VM real. |
 | Pantalla negra al conectar | Sesión mal lanzada. Revisa `/etc/xrdp/startwm.sh` y `sudo systemctl restart xrdp`. |
 | Se corta a los ~10 min | Salvapantallas. El instalador ya lo desactiva; si tocaste la config, vuelve a lanzarlo. |
 | `Authentication required` | Popup de colord. El instalador crea la regla de polkit; cierra sesión y reconecta. |
